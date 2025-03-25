@@ -1,4 +1,0 @@
-Nazwa maszyny: widlec
-Dane techniczne: nie
-Lokalizacja: safa
-Dodatkowe informacje: tak
