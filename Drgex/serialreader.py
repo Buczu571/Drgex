@@ -6,6 +6,7 @@ import struct
 import numpy
 import matplotlib.pyplot as plt
 import csv
+import os
 from scipy.signal import iirnotch
 from scipy.signal import filtfilt
 from PyQt6.QtWidgets import QApplication, QMainWindow, QWidget, QGridLayout, QPushButton, QComboBox, QLabel, QLineEdit, QCheckBox, QVBoxLayout, QSpacerItem, QSizePolicy, QFileDialog
@@ -14,11 +15,11 @@ from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT
 from matplotlib.figure import Figure
 
-class MyWindow(QMainWindow):
-    def __init__(self):
+class SerialReader(QMainWindow):
+    def __init__(self, selected_machine, selected_measurment):
         super().__init__()
 
-        self.setWindowTitle("Serial Reader")
+        self.setWindowTitle("Pomiar")
         self.setGeometry(0, 0, 1536, 864)
         self.showMaximized()
         #self.showFullScreen()
@@ -27,6 +28,8 @@ class MyWindow(QMainWindow):
         self.setCentralWidget(central_widget)
         self.export_data = []
         self.import_data = []
+        self.selected_machine = selected_machine
+        self.selected_measurment = selected_measurment
 
         grid_layout = QGridLayout()
 
@@ -191,6 +194,7 @@ class MyWindow(QMainWindow):
         err_no = 0
         
         while time.time() - start_time < end_time:
+            self.text_field_4.setText(str(end_time - start_time))
             raw_data = ser.read(2)
             if len(raw_data) == 2:
                 adc_value = struct.unpack('<h', raw_data)[0]
@@ -206,6 +210,7 @@ class MyWindow(QMainWindow):
                     data.append(adc_value)
 
         print("Zakończono odbieranie danych.", len(data), err_no)
+        self.text_field_4.setText("")
 
         self.export_data = data.copy()
         self.export_data.insert(0,int(len(self.export_data)/time_value))
@@ -286,7 +291,14 @@ class MyWindow(QMainWindow):
         return filtfilt(b, a, data)
     
     def import_csv(self):
-        file_name, _ = QFileDialog.getOpenFileName(self, "Wybierz plik CSV", "", "CSV Files (*.csv);;All Files (*)")
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+
+        if self.selected_machine and self.selected_measurment != None:
+            file_name, _ = QFileDialog.getOpenFileName(self, "Wybierz plik CSV", os.path.join(base_dir, self.selected_machine, self.selected_measurment), "CSV Files (*.csv);;All Files (*)")
+        elif self.selected_machine != None:
+            file_name, _ = QFileDialog.getOpenFileName(self, "Wybierz plik CSV", os.path.join(base_dir, self.selected_machine), "CSV Files (*.csv);;All Files (*)")
+        else:
+            file_name, _ = QFileDialog.getOpenFileName(self, "Wybierz plik CSV", "", "CSV Files (*.csv);;All Files (*)")
 
         if file_name:
             with open(file_name, mode="r", newline="") as file:
@@ -321,7 +333,15 @@ class MyWindow(QMainWindow):
 
 
     def export_csv(self):
-        file_name, _ = QFileDialog.getSaveFileName(self, "Zapisz plik CSV", "", "CSV Files (*.csv);;All Files (*)")
+
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+
+        if self.selected_machine and self.selected_measurment != None:
+            file_name, _ = QFileDialog.getSaveFileName(self, "Zapisz plik CSV", os.path.join(base_dir, self.selected_machine, self.selected_measurment), "CSV Files (*.csv);;All Files (*)")
+        elif self.selected_machine != None:
+            file_name, _ = QFileDialog.getSaveFileName(self, "Zapisz plik CSV", os.path.join(base_dir, self.selected_machine), "CSV Files (*.csv);;All Files (*)")
+        else:
+            file_name, _ = QFileDialog.getSaveFileName(self, "Zapisz plik CSV", "", "CSV Files (*.csv);;All Files (*)")
 
         if file_name:
             with open(file_name, mode="w", newline="") as file:
@@ -331,8 +351,8 @@ class MyWindow(QMainWindow):
             print(f"Plik zapisany jako {file_name}")
 
 
-if __name__ == "__main__":
-    app = QApplication(sys.argv)
-    window = MyWindow()
-    window.show()
-    sys.exit(app.exec())
+#if __name__ == "__main__":
+#    app = QApplication(sys.argv)
+#    window = SerialReader()
+#    window.show()
+#    sys.exit(app.exec())
