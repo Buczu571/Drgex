@@ -7,6 +7,7 @@ import numpy
 import matplotlib.pyplot as plt
 import csv
 import os
+import scipy.signal
 from scipy.signal import iirnotch
 from scipy.signal import filtfilt
 from PyQt6.QtWidgets import QApplication, QMainWindow, QWidget, QGridLayout, QPushButton, QComboBox, QLabel, QLineEdit, QCheckBox, QVBoxLayout, QSpacerItem, QSizePolicy, QFileDialog
@@ -28,6 +29,8 @@ class SerialReader(QMainWindow):
         self.setCentralWidget(central_widget)
         self.export_data = []
         self.import_data = []
+        self.spectrogram_data = []
+        self.spectr_freq_value = None
         self.selected_machine = selected_machine
         self.selected_measurment = selected_measurment
 
@@ -146,6 +149,10 @@ class SerialReader(QMainWindow):
         self.csv_export_button.clicked.connect(self.export_csv)
         grid_layout.addWidget(self.csv_export_button, 1, 28, 1, 4)
 
+        self.spectrogram_button = QPushButton("Spektrogram")
+        self.spectrogram_button.clicked.connect(self.spectrogram)
+        grid_layout.addWidget(self.spectrogram_button, 1, 20, 1, 4)
+
         central_widget.setLayout(grid_layout)
 
     def load_com_ports(self):
@@ -214,6 +221,9 @@ class SerialReader(QMainWindow):
 
         self.export_data = data.copy()
         self.export_data.insert(0,int(len(self.export_data)/time_value))
+
+        self.spectrogram_data = data.copy()
+        self.spectrogram_data.insert(0,int(len(self.export_data)/time_value))
 
         data = numpy.array(data, dtype=float)
         self.plot_values_data(data)
@@ -290,6 +300,32 @@ class SerialReader(QMainWindow):
         b, a = iirnotch(freq, quality, fs)
         return filtfilt(b, a, data)
     
+
+    def spectrogram(self):
+        try:
+            first_element = self.spectrogram_data[0]
+        except IndexError:
+            print("Brak danych do spektrogramu")
+            return
+
+        if isinstance (self.spectrogram_data, list):
+            self.spectr_freq_value = self.spectrogram_data[0]
+            self.spectrogram_data.pop(0)
+
+        self.spectrogram_data = numpy.array(self.spectrogram_data)
+
+        frequencies, times, Sxx = scipy.signal.spectrogram(self.spectrogram_data, self.spectr_freq_value, nperseg=1024)
+
+        plt.figure(figsize=(12, 6))
+        plt.pcolormesh(times, frequencies, 10 * numpy.log10(Sxx), shading='gouraud', cmap='inferno')
+        plt.colorbar(label="Moc sygnału")
+        plt.xlabel("Czas (s)")
+        plt.ylabel("Częstotliwość (Hz)")
+        plt.title("Spektrogram sygnału")
+        plt.ylim(0, self.spectr_freq_value/2)
+        plt.show()
+
+
     def import_csv(self):
         base_dir = os.path.dirname(os.path.abspath(__file__))
 
@@ -306,6 +342,8 @@ class SerialReader(QMainWindow):
                 self.import_data = [int(row[0]) for row in reader]
 
             print(f"Dane zaimportowane z pliku {file_name}")
+
+            self.spectrogram_data = self.import_data.copy()
 
             self.plot_values_canvas.figure.clf()
             self.plot_fft_canvas.figure.clf()
