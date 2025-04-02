@@ -433,25 +433,22 @@ class Cockpit(QMainWindow):
 
             self.analyze_mode3()
             self.analyze_mode4()
-            
+            self.analyze_mode1b()
+            self.analyze_mode2b()
             self.analyze_mode1()
             self.analyze_mode2()
 
-            self.analyze_selector = 1
+            self.analyze_selector = 4
 
             
 
 
     def analyze_mode1(self):
-        if self.analyze_selector == 0 or self.analyze_selector == 2:
-            if hasattr(self, "plot_fft1_widget"):
-                self.plot_fft1_canvas.figure.clf()
-
-            if hasattr(self, "plot_fft1_layout"):
-                self.plot_fft1_layout.setParent(None)
-            
-            if hasattr(self, "fft1_toolbar"):
-                self.fft1_toolbar.setParent(None)
+        if self.analyze_selector == 0 or self.analyze_selector == 3 or self.analyze_selector == 4:
+            if hasattr(self, "plot_fft1_widget") and self.plot_fft1_widget is not None:
+                self.plot_fft1_widget.setParent(None)
+                self.plot_fft1_widget.deleteLater()
+                self.plot_fft1_widget = None
 
             self.plot_fft1_widget = QWidget(self)
             self.plot_fft1_layout = QVBoxLayout(self.plot_fft1_widget)
@@ -476,31 +473,20 @@ class Cockpit(QMainWindow):
 
             self.plot_fft1_canvas.draw()
         
-        elif self.analyze_selector == 1:
-            if hasattr(self, "plot_fft1_widget"):
+        elif self.analyze_selector == 1 or self.analyze_selector == 2:
+            if hasattr(self, "plot_fft1_widget") and self.plot_fft1_widget is not None:
                 self.plot_fft1_widget.setParent(None)
-
-            #if hasattr(self, "plot_fft1_canvas"):
-            #    self.plot_fft1_canvas.setParent(None)
-
-            #if hasattr(self, "plot_fft1_layout"):
-            #    self.plot_fft1_layout.setParent(None)
-            
-            #if hasattr(self, "fft1_toolbar"):
-            #    self.fft1_toolbar.setParent(None)
+                self.plot_fft1_widget.deleteLater()
+                self.plot_fft1_widget = None
 
 
 
     def analyze_mode2(self):
-        if self.analyze_selector == 0 or self.analyze_selector == 2:
-            if hasattr(self, "plot_fft2_widget"):
-                self.plot_fft2_canvas.figure.clf()
-
-            if hasattr(self, "plot_fft2_layout"):
-                self.plot_fft2_layout.setParent(None)
-            
-            if hasattr(self, "fft2_toolbar"):
-                self.fft2_toolbar.setParent(None)
+        if self.analyze_selector == 0 or self.analyze_selector == 1 or self.analyze_selector == 3:
+            if hasattr(self, "plot_fft2_widget") and self.plot_fft2_widget is not None:
+                self.plot_fft2_widget.setParent(None)
+                self.plot_fft2_widget.deleteLater()
+                self.plot_fft2_widget = None
 
             self.plot_fft2_widget = QWidget(self)
             self.plot_fft2_layout = QVBoxLayout(self.plot_fft2_widget)
@@ -512,7 +498,10 @@ class Cockpit(QMainWindow):
 
             self.plot_fft2_layout.addWidget(self.plot_fft2_canvas)
 
-            self.grid_layout.addWidget(self.plot_fft2_widget, 4, 16, 28, 16)
+            if self.analyze_selector == 1:
+                self.grid_layout.addWidget(self.plot_fft2_widget, 4, 0, 28, 16)
+            else:
+                self.grid_layout.addWidget(self.plot_fft2_widget, 4, 16, 28, 16)
 
             ax = self.plot_fft2_canvas.figure.add_subplot(111)
 
@@ -525,30 +514,19 @@ class Cockpit(QMainWindow):
 
             self.plot_fft2_canvas.draw()
 
-        elif self.analyze_selector == 1:
-            if hasattr(self, "plot_fft2_widget"):
+        elif self.analyze_selector == 2 or self.analyze_selector == 4:
+            if hasattr(self, "plot_fft2_widget") and self.plot_fft2_widget is not None:
                 self.plot_fft2_widget.setParent(None)
-
-            #if hasattr(self, "plot_fft2_canvas"):
-            #    self.plot_fft2_canvas.setParent(None)
-
-            #if hasattr(self, "plot_fft2_layout"):
-            #    self.plot_fft2_layout.setParent(None)
-            
-            #if hasattr(self, "fft2_toolbar"):
-            #    self.fft2_toolbar.setParent(None)
+                self.plot_fft2_widget.deleteLater()
+                self.plot_fft2_widget = None
 
 
     def analyze_mode3(self):
-        if self.analyze_selector == 1:
-            if hasattr(self, "plot_fft3_widget"):
-                self.plot_fft3_canvas.figure.clf()
-
-            if hasattr(self, "plot_fft3_layout"):
-                self.plot_fft3_layout.setParent(None)
-            
-            if hasattr(self, "fft3_toolbar"):
-                self.fft3_toolbar.setParent(None)
+        if self.analyze_selector == 2:
+            if hasattr(self, "plot_fft3_widget") and self.plot_fft3_widget is not None:
+                self.plot_fft3_widget.setParent(None)
+                self.plot_fft3_widget.deleteLater()
+                self.plot_fft3_widget = None
 
             self.plot_fft3_widget = QWidget(self)
             self.plot_fft3_layout = QVBoxLayout(self.plot_fft3_widget)
@@ -577,22 +555,15 @@ class Cockpit(QMainWindow):
 
             self.plot_fft3_canvas.draw()
 
-        elif self.analyze_selector == 0 or self.analyze_selector == 2:
-            if hasattr(self, "plot_fft3_widget"):
+        elif self.analyze_selector == 0 or self.analyze_selector == 1 or self.analyze_selector == 3 or self.analyze_selector == 4:
+            if hasattr(self, "plot_fft3_widget") and self.plot_fft3_widget is not None:
                 self.plot_fft3_widget.setParent(None)
-
-            #if hasattr(self, "plot_fft3_canvas"):
-            #    self.plot_fft3_canvas.setParent(None)
-
-            #if hasattr(self, "plot_fft3_layout"):
-            #    self.plot_fft3_layout.setParent(None)
-            
-            #if hasattr(self, "fft3_toolbar"):
-            #    self.fft3_toolbar.setParent(None)
+                self.plot_fft3_widget.deleteLater()
+                self.plot_fft3_widget = None
 
     
     def analyze_mode4(self):
-        if self.analyze_selector == 1:
+        if self.analyze_selector == 2:
 
             self.line_edits = []
             self.line_edits_all = []
@@ -627,7 +598,6 @@ class Cockpit(QMainWindow):
                         top_freqs.append(freq)
                         print(freq, self.fftdiff[freq], self.fftdiff[freq-1], self.fftdiff[freq+1])
 
-            print(top_freqs_c)
             print(top_freqs)
             top_values = self.fftdiff[:int(self.csv_standard_length/2)][top_freqs]
             
@@ -666,13 +636,13 @@ class Cockpit(QMainWindow):
 
             for line_edit in self.line_edits_all:
                 line_edit.setStyleSheet("""
-                    background-color: #E0E0E0;
+                    background-color: #F0F0F0;
                     border: 1px solid #000000;
                     font-size: 14px;
                 """)
 
 
-        elif self.analyze_selector == 0 or self.analyze_selector == 2:
+        elif self.analyze_selector == 0 or self.analyze_selector == 1 or self.analyze_selector == 3 or self.analyze_selector == 4:
             if hasattr(self, "line_value") and self.line_value is not None:
                 self.line_value.setParent(None)
                 self.line_value.deleteLater()
@@ -691,7 +661,183 @@ class Cockpit(QMainWindow):
                 self.mse_value.setParent(None)
                 self.mse_value.deleteLater()
                 self.mse_value = None
+
+    
+    def analyze_mode1b(self):
+        if self.analyze_selector == 4:
+
+            self.line_edits1b = []
+            self.line_edits1b_all = []
+
+            self.line_freq1b = QLineEdit(self)
+            self.line_freq1b.setReadOnly(True)
+            self.line_freq1b.setText("Częstotliwość")
+            self.line_edits1b_all.append(self.line_freq1b)
+            self.grid_layout.addWidget(self.line_freq1b, 6, 20, 1, 4)
+
+            self.line_value1b = QLineEdit(self)
+            self.line_value1b.setReadOnly(True)
+            self.line_value1b.setText("Amplituda")
+            self.line_edits1b_all.append(self.line_value1b)
+            self.grid_layout.addWidget(self.line_value1b, 6, 24, 1, 4)
+
+
+            top_freqs_c = numpy.where(self.fft1_average[:int(self.csv_standard_length/2)])[0]
+            top_freqs = []
+
+            for freq in top_freqs_c:
+                if freq == 0:
+                    if self.fft1_average[freq] > self.fft1_average[freq+1]:
+                        top_freqs.append(freq)
+                elif freq == self.csv_standard_length:
+                    if self.fft1_average[freq] > self.fft1_average[freq-1]:
+                        top_freqs.append(freq)
+                else:
+                    if self.fft1_average[freq] > self.fft1_average[freq-1] and self.fft1_average[freq] > self.fft1_average[freq+1]:
+                        top_freqs.append(freq)
+                        print(freq, self.fft1_average[freq], self.fft1_average[freq-1], self.fft1_average[freq+1])
+
+            print(top_freqs)
+            top_values = self.fft1_average[:int(self.csv_standard_length/2)][top_freqs]
             
+            sorted_pairs = sorted(zip(top_values, top_freqs), reverse=True)
+
+            top_values, top_freqs = zip(*sorted_pairs)
+
+            top_values = list(top_values)
+            top_freqs = list(top_freqs)
+
+            row_range = 0
+
+            if len(top_freqs) > 20:
+                row_range = 20
+            else:
+                row_range = len(top_freqs)
+
+            for row in range(row_range):
+                for col in range(2):
+                    line_edit = QLineEdit(self)
+                    line_edit.setReadOnly(True)
+                    if col == 0:
+                        line_edit.setText(str(top_freqs[row]) + " Hz")
+                        self.grid_layout.addWidget(line_edit, row+7, 20, 1, 4)
+                    elif col == 1:
+                        line_edit.setText(str(round(float(top_values[row]), 3)))
+                        self.grid_layout.addWidget(line_edit, row+7, 24, 1, 4)
+                    self.line_edits1b.append(line_edit)
+                    self.line_edits1b_all.append(line_edit)
+
+            for line_edit in self.line_edits1b_all:
+                line_edit.setStyleSheet("""
+                    background-color: #F0F0F0;
+                    border: 1px solid #000000;
+                    font-size: 14px;
+                """)
+
+
+        elif self.analyze_selector == 0 or self.analyze_selector == 1 or self.analyze_selector == 2 or self.analyze_selector == 3:
+            if hasattr(self, "line_value") and self.line_value1b is not None:
+                self.line_value1b.setParent(None)
+                self.line_value1b.deleteLater()
+                self.line_value1b = None
+                for line_edit in self.line_edits1b:
+                    self.grid_layout.removeWidget(line_edit)
+                    line_edit.deleteLater()
+                    line_edit = None
+
+            if hasattr(self, "line_freq") and self.line_freq1b is not None:
+                self.line_freq1b.setParent(None)
+                self.line_freq1b.deleteLater()
+                self.line_freq1b = None
+
+    
+    def analyze_mode2b(self):
+        if self.analyze_selector == 1:
+
+            self.line_edits2b = []
+            self.line_edits2b_all = []
+
+            self.line_freq2b = QLineEdit(self)
+            self.line_freq2b.setReadOnly(True)
+            self.line_freq2b.setText("Częstotliwość")
+            self.line_edits2b_all.append(self.line_freq2b)
+            self.grid_layout.addWidget(self.line_freq2b, 6, 20, 1, 4)
+
+            self.line_value2b = QLineEdit(self)
+            self.line_value2b.setReadOnly(True)
+            self.line_value2b.setText("Amplituda")
+            self.line_edits2b_all.append(self.line_value2b)
+            self.grid_layout.addWidget(self.line_value2b, 6, 24, 1, 4)
+
+
+            top_freqs_c = numpy.where(self.fft2_average[:int(self.csv_standard_length/2)])[0]
+            top_freqs = []
+
+            for freq in top_freqs_c:
+                if freq == 0:
+                    if self.fft2_average[freq] > self.fft2_average[freq+1]:
+                        top_freqs.append(freq)
+                elif freq == self.csv_standard_length:
+                    if self.fft2_average[freq] > self.fft2_average[freq-1]:
+                        top_freqs.append(freq)
+                else:
+                    if self.fft2_average[freq] > self.fft2_average[freq-1] and self.fft2_average[freq] > self.fft2_average[freq+1]:
+                        top_freqs.append(freq)
+                        print(freq, self.fft2_average[freq], self.fft2_average[freq-1], self.fft2_average[freq+1])
+
+            print(top_freqs)
+            top_values = self.fft2_average[:int(self.csv_standard_length/2)][top_freqs]
+            
+            sorted_pairs = sorted(zip(top_values, top_freqs), reverse=True)
+
+            top_values, top_freqs = zip(*sorted_pairs)
+
+            top_values = list(top_values)
+            top_freqs = list(top_freqs)
+
+            row_range = 0
+
+            if len(top_freqs) > 20:
+                row_range = 20
+            else:
+                row_range = len(top_freqs)
+
+            for row in range(row_range):
+                for col in range(2):
+                    line_edit = QLineEdit(self)
+                    line_edit.setReadOnly(True)
+                    if col == 0:
+                        line_edit.setText(str(top_freqs[row]) + " Hz")
+                        self.grid_layout.addWidget(line_edit, row+7, 20, 1, 4)
+                    elif col == 1:
+                        line_edit.setText(str(round(float(top_values[row]), 3)))
+                        self.grid_layout.addWidget(line_edit, row+7, 24, 1, 4)
+                    self.line_edits2b.append(line_edit)
+                    self.line_edits2b_all.append(line_edit)
+
+            for line_edit in self.line_edits2b_all:
+                line_edit.setStyleSheet("""
+                    background-color: #F0F0F0;
+                    border: 1px solid #000000;
+                    font-size: 14px;
+                """)
+
+
+        elif self.analyze_selector == 0 or self.analyze_selector == 2 or self.analyze_selector == 3 or self.analyze_selector == 4:
+            if hasattr(self, "line_value") and self.line_value2b is not None:
+                self.line_value2b.setParent(None)
+                self.line_value2b.deleteLater()
+                self.line_value2b = None
+                for line_edit in self.line_edits2b:
+                    self.grid_layout.removeWidget(line_edit)
+                    line_edit.deleteLater()
+                    line_edit = None
+
+            if hasattr(self, "line_freq") and self.line_freq2b is not None:
+                self.line_freq2b.setParent(None)
+                self.line_freq2b.deleteLater()
+                self.line_freq2b = None
+
 
     def analyze_mode_selector(self):
         if self.analyze_selector == 0:
@@ -699,15 +845,26 @@ class Cockpit(QMainWindow):
             new_value = 0
         elif self.analyze_selector == 1:
             self.analyze_mode1()
+            self.analyze_mode1b()
             self.analyze_mode2()
-            self.analyze_mode3()
-            self.analyze_mode4()
+            self.analyze_mode2b()
             new_value = 2
         elif self.analyze_selector == 2:
+            self.analyze_mode2()
+            self.analyze_mode2b()
+            self.analyze_mode3()
+            self.analyze_mode4()
+            new_value = 3
+        elif self.analyze_selector == 3:
             self.analyze_mode3()
             self.analyze_mode4()
             self.analyze_mode1()
             self.analyze_mode2()
+            new_value = 4
+        elif self.analyze_selector == 4:
+            self.analyze_mode2()
+            self.analyze_mode1()
+            self.analyze_mode1b()
             new_value = 1
         self.analyze_selector = new_value
         
