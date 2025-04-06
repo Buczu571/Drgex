@@ -261,6 +261,7 @@ class SerialReader(QMainWindow):
         data_fft = numpy.array(data_fft) - numpy.mean(data_fft)
 
         yf = numpy.fft.fft(data_fft)
+        yf = numpy.abs(yf) * 2048 / len(data_fft)
         xf = numpy.fft.fftfreq(len(data_fft), 1/(len(data_fft)/time_value))
 
         print(len(data_fft),len(data_fft)/time_value)
@@ -365,6 +366,7 @@ class SerialReader(QMainWindow):
             data_fft = numpy.array(data_fft) - numpy.mean(data_fft)
 
             yf = numpy.fft.fft(data_fft)
+            yf = numpy.abs(yf) * 2048 / len(data_fft)
             xf = numpy.fft.fftfreq(len(data_fft), 1/(freq_value))
 
             self.plot_fft_data(data_fft, yf, xf)

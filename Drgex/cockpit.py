@@ -5,12 +5,16 @@ import csv
 import numpy
 import string
 from scipy.signal import savgol_filter
-from PyQt6.QtWidgets import QApplication, QPushButton, QMainWindow, QSpacerItem, QSizePolicy, QGridLayout, QWidget, QLineEdit, QMessageBox, QVBoxLayout, QTableWidget
+from PyQt6 import QtCore, QtGui
+from PyQt6.QtCore import Qt
+from PyQt6.QtWidgets import QApplication, QPushButton, QMainWindow, QSpacerItem, QSizePolicy, QGridLayout, QWidget, QLineEdit, QMessageBox, QVBoxLayout, QTableWidget, QTextEdit
 from serialreader import SerialReader
 from dialogs import NewMachineDialog, EditMachineDialog, SelectMachineDialog, NewMeasurmentsDialog, EditMeasurmentsDialog, SelectMeasurmentsDialog, SelectAnalyzeDialog
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT
 from matplotlib.figure import Figure
+
+os.environ["QT_SCALE_FACTOR"] = "0.8"  
 
 class Cockpit(QMainWindow):
     def __init__(self):
@@ -403,9 +407,12 @@ class Cockpit(QMainWindow):
                     #import_data = import_data * window
 
                     yf = numpy.fft.fft(import_data)
-                    fft_magnitude_sum1 += numpy.abs(yf) ** 2
+                    yf = numpy.abs(yf) * 2048 / len(import_data)
+                    fft_magnitude_sum1 += numpy.abs(yf)
 
-            self.fft1_average = fft_magnitude_sum1/self.csv_standard_length
+            self.fft1_average = fft_magnitude_sum1/len(csv_files1)
+            #self.fft1_average = savgol_filter(self.fft1_average, window_length=5, polyorder=2)
+            self.fft1_average = numpy.clip(self.fft1_average, 0, None)
             self.xf1 = numpy.fft.fftfreq(self.csv_standard_length, 1/self.csv_standard_length)
 
 
@@ -423,420 +430,440 @@ class Cockpit(QMainWindow):
                     #import_data = import_data * window
 
                     yf = numpy.fft.fft(import_data)
-                    fft_magnitude_sum2 += numpy.abs(yf) ** 2
+                    yf = numpy.abs(yf) * 2048 / len(import_data)
+                    fft_magnitude_sum2 += numpy.abs(yf)
 
             
-            self.fft2_average = fft_magnitude_sum2/self.csv_standard_length
+            self.fft2_average = fft_magnitude_sum2/len(csv_files2)
+            #self.fft2_average = savgol_filter(self.fft2_average, window_length=5, polyorder=2)
+            self.fft2_average = numpy.clip(self.fft2_average, 0, None)
             self.xf2 = numpy.fft.fftfreq(self.csv_standard_length, 1/self.csv_standard_length)        
 
             self.analyze_selector = 0
 
-            self.analyze_mode3()
-            self.analyze_mode4()
-            self.analyze_mode1b()
-            self.analyze_mode2b()
+            self.clear_all()
             self.analyze_mode1()
             self.analyze_mode2()
 
-            self.analyze_selector = 4
+            self.analyze_selector = 5
 
             
-
-
     def analyze_mode1(self):
-        if self.analyze_selector == 0 or self.analyze_selector == 3 or self.analyze_selector == 4:
-            if hasattr(self, "plot_fft1_widget") and self.plot_fft1_widget is not None:
-                self.plot_fft1_widget.setParent(None)
-                self.plot_fft1_widget.deleteLater()
-                self.plot_fft1_widget = None
+        self.plot_fft1_widget = QWidget(self)
+        self.plot_fft1_layout = QVBoxLayout(self.plot_fft1_widget)
 
-            self.plot_fft1_widget = QWidget(self)
-            self.plot_fft1_layout = QVBoxLayout(self.plot_fft1_widget)
+        self.plot_fft1_canvas = FigureCanvas(Figure(figsize=(5, 3)))
 
-            self.plot_fft1_canvas = FigureCanvas(Figure(figsize=(5, 3)))
+        self.fft1_toolbar = NavigationToolbar2QT(self.plot_fft1_canvas, self)
+        self.plot_fft1_layout.addWidget(self.fft1_toolbar)
 
-            self.fft1_toolbar = NavigationToolbar2QT(self.plot_fft1_canvas, self)
-            self.plot_fft1_layout.addWidget(self.fft1_toolbar)
+        self.plot_fft1_layout.addWidget(self.plot_fft1_canvas)
 
-            self.plot_fft1_layout.addWidget(self.plot_fft1_canvas)
+        self.grid_layout.addWidget(self.plot_fft1_widget, 4, 0, 28, 16)
 
-            self.grid_layout.addWidget(self.plot_fft1_widget, 4, 0, 28, 16)
+        ax = self.plot_fft1_canvas.figure.add_subplot(111)
 
-            ax = self.plot_fft1_canvas.figure.add_subplot(111)
+        ax.clear()
+        ax.plot(self.xf1[:self.csv_standard_length//2], self.fft1_average[:self.csv_standard_length//2], marker='o', linestyle='-', markersize=1)
 
-            ax.clear()
-            ax.plot(self.xf1[:self.csv_standard_length//2], self.fft1_average[:self.csv_standard_length//2], marker='o', linestyle='-', markersize=2)
+        ax.set_xlabel("Częstotliwość (Hz)")
+        ax.set_ylabel("Amplituda")
+        ax.set_title("Analiza FFT - " + self.analyze_folders[0])
 
-            ax.set_xlabel("Częstotliwość (Hz)")
-            ax.set_ylabel("Amplituda")
-            ax.set_title("Analiza FFT - " + self.analyze_folders[0])
-
-            self.plot_fft1_canvas.draw()
+        self.plot_fft1_canvas.draw()
         
-        elif self.analyze_selector == 1 or self.analyze_selector == 2:
-            if hasattr(self, "plot_fft1_widget") and self.plot_fft1_widget is not None:
-                self.plot_fft1_widget.setParent(None)
-                self.plot_fft1_widget.deleteLater()
-                self.plot_fft1_widget = None
-
-
 
     def analyze_mode2(self):
-        if self.analyze_selector == 0 or self.analyze_selector == 1 or self.analyze_selector == 3:
-            if hasattr(self, "plot_fft2_widget") and self.plot_fft2_widget is not None:
-                self.plot_fft2_widget.setParent(None)
-                self.plot_fft2_widget.deleteLater()
-                self.plot_fft2_widget = None
+        self.plot_fft2_widget = QWidget(self)
+        self.plot_fft2_layout = QVBoxLayout(self.plot_fft2_widget)
 
-            self.plot_fft2_widget = QWidget(self)
-            self.plot_fft2_layout = QVBoxLayout(self.plot_fft2_widget)
+        self.plot_fft2_canvas = FigureCanvas(Figure(figsize=(5, 3)))
 
-            self.plot_fft2_canvas = FigureCanvas(Figure(figsize=(5, 3)))
+        self.fft2_toolbar = NavigationToolbar2QT(self.plot_fft2_canvas, self)
+        self.plot_fft2_layout.addWidget(self.fft2_toolbar)
 
-            self.fft2_toolbar = NavigationToolbar2QT(self.plot_fft2_canvas, self)
-            self.plot_fft2_layout.addWidget(self.fft2_toolbar)
+        self.plot_fft2_layout.addWidget(self.plot_fft2_canvas)
 
-            self.plot_fft2_layout.addWidget(self.plot_fft2_canvas)
+        if self.analyze_selector == 1:
+            self.grid_layout.addWidget(self.plot_fft2_widget, 4, 0, 28, 16)
+        else:
+            self.grid_layout.addWidget(self.plot_fft2_widget, 4, 16, 28, 16)
 
-            if self.analyze_selector == 1:
-                self.grid_layout.addWidget(self.plot_fft2_widget, 4, 0, 28, 16)
-            else:
-                self.grid_layout.addWidget(self.plot_fft2_widget, 4, 16, 28, 16)
+        ax = self.plot_fft2_canvas.figure.add_subplot(111)
 
-            ax = self.plot_fft2_canvas.figure.add_subplot(111)
+        ax.clear()
+        ax.plot(self.xf2[:self.csv_standard_length//2], self.fft2_average[:self.csv_standard_length//2], marker='o', linestyle='-', markersize=1)
 
-            ax.clear()
-            ax.plot(self.xf2[:self.csv_standard_length//2], self.fft2_average[:self.csv_standard_length//2], marker='o', linestyle='-', markersize=2)
+        ax.set_xlabel("Częstotliwość (Hz)")
+        ax.set_ylabel("Amplituda")
+        ax.set_title("Analiza FFT - " + self.analyze_folders[1])
 
-            ax.set_xlabel("Częstotliwość (Hz)")
-            ax.set_ylabel("Amplituda")
-            ax.set_title("Analiza FFT - " + self.analyze_folders[1])
-
-            self.plot_fft2_canvas.draw()
-
-        elif self.analyze_selector == 2 or self.analyze_selector == 4:
-            if hasattr(self, "plot_fft2_widget") and self.plot_fft2_widget is not None:
-                self.plot_fft2_widget.setParent(None)
-                self.plot_fft2_widget.deleteLater()
-                self.plot_fft2_widget = None
+        self.plot_fft2_canvas.draw()
 
 
     def analyze_mode3(self):
-        if self.analyze_selector == 2:
-            if hasattr(self, "plot_fft3_widget") and self.plot_fft3_widget is not None:
-                self.plot_fft3_widget.setParent(None)
-                self.plot_fft3_widget.deleteLater()
-                self.plot_fft3_widget = None
+        self.plot_fft3_widget = QWidget(self)
+        self.plot_fft3_layout = QVBoxLayout(self.plot_fft3_widget)
 
-            self.plot_fft3_widget = QWidget(self)
-            self.plot_fft3_layout = QVBoxLayout(self.plot_fft3_widget)
+        self.plot_fft3_canvas = FigureCanvas(Figure(figsize=(5, 3)))
 
-            self.plot_fft3_canvas = FigureCanvas(Figure(figsize=(5, 3)))
+        self.fft3_toolbar = NavigationToolbar2QT(self.plot_fft3_canvas, self)
+        self.plot_fft3_layout.addWidget(self.fft3_toolbar)
 
-            self.fft3_toolbar = NavigationToolbar2QT(self.plot_fft3_canvas, self)
-            self.plot_fft3_layout.addWidget(self.fft3_toolbar)
+        self.plot_fft3_layout.addWidget(self.plot_fft3_canvas)
 
-            self.plot_fft3_layout.addWidget(self.plot_fft3_canvas)
+        self.grid_layout.addWidget(self.plot_fft3_widget, 4, 0, 28, 16)
 
-            self.grid_layout.addWidget(self.plot_fft3_widget, 4, 0, 28, 16)
+        ax = self.plot_fft3_canvas.figure.add_subplot(111)
 
-            ax = self.plot_fft3_canvas.figure.add_subplot(111)
+        self.fftdiff = numpy.abs(self.fft1_average - self.fft2_average)
+        #self.fftdiff = savgol_filter(self.fftdiff, window_length=5, polyorder=2)
+        #self.fftdiff = numpy.clip(self.fftdiff, 0, None)
 
-            self.fftdiff = numpy.abs(self.fft1_average - self.fft2_average)
-            self.fftdiff = savgol_filter(self.fftdiff, window_length=7, polyorder=2)
-            self.fftdiff = numpy.clip(self.fftdiff, 0, None)
+        ax.clear()
+        ax.plot(self.xf2[:self.csv_standard_length//2], self.fftdiff[:self.csv_standard_length//2], marker='o', linestyle='-', markersize=1)
 
-            ax.clear()
-            ax.plot(self.xf2[:self.csv_standard_length//2], self.fftdiff[:self.csv_standard_length//2], marker='o', linestyle='-', markersize=2)
+        ax.set_xlabel("Częstotliwość (Hz)")
+        ax.set_ylabel("Amplituda")
+        ax.set_title("Różnica amplitud FFT - " + self.analyze_folders[0] + " | " + self.analyze_folders[1])
 
-            ax.set_xlabel("Częstotliwość (Hz)")
-            ax.set_ylabel("Amplituda")
-            ax.set_title("Różnica amplitud FFT - " + self.analyze_folders[0] + " | " + self.analyze_folders[1])
-
-            self.plot_fft3_canvas.draw()
-
-        elif self.analyze_selector == 0 or self.analyze_selector == 1 or self.analyze_selector == 3 or self.analyze_selector == 4:
-            if hasattr(self, "plot_fft3_widget") and self.plot_fft3_widget is not None:
-                self.plot_fft3_widget.setParent(None)
-                self.plot_fft3_widget.deleteLater()
-                self.plot_fft3_widget = None
-
-    
-    def analyze_mode4(self):
-        if self.analyze_selector == 2:
-
-            self.line_edits = []
-            self.line_edits_all = []
-
-            self.line_freq = QLineEdit(self)
-            self.line_freq.setReadOnly(True)
-            self.line_freq.setText("Częstotliwość")
-            self.line_edits_all.append(self.line_freq)
-            self.grid_layout.addWidget(self.line_freq, 6, 20, 1, 4)
-
-            self.line_value = QLineEdit(self)
-            self.line_value.setReadOnly(True)
-            self.line_value.setText("Różnica amplitudy")
-            self.line_edits_all.append(self.line_value)
-            self.grid_layout.addWidget(self.line_value, 6, 24, 1, 4)
-
-            mse = numpy.mean(self.fftdiff ** 2)
-
-
-            top_freqs_c = numpy.where(self.fftdiff[:int(self.csv_standard_length/2)] > mse/4)[0]
-            top_freqs = []
-
-            for freq in top_freqs_c:
-                if freq == 0:
-                    if self.fftdiff[freq] > self.fftdiff[freq+1]:
-                        top_freqs.append(freq)
-                elif freq == self.csv_standard_length:
-                    if self.fftdiff[freq] > self.fftdiff[freq-1]:
-                        top_freqs.append(freq)
-                else:
-                    if self.fftdiff[freq] > self.fftdiff[freq-1] and self.fftdiff[freq] > self.fftdiff[freq+1]:
-                        top_freqs.append(freq)
-                        print(freq, self.fftdiff[freq], self.fftdiff[freq-1], self.fftdiff[freq+1])
-
-            print(top_freqs)
-            top_values = self.fftdiff[:int(self.csv_standard_length/2)][top_freqs]
+        self.plot_fft3_canvas.draw()
             
-            sorted_pairs = sorted(zip(top_values, top_freqs), reverse=True)
 
-            top_values, top_freqs = zip(*sorted_pairs)
+    def analyze_mode4(self):
+        self.line_edits = []
+        self.line_edits_all = []
 
-            top_values = list(top_values)
-            top_freqs = list(top_freqs)
+        self.line_freq = QLineEdit(self)
+        self.line_freq.setText("Częstotliwość")
+        self.line_edits_all.append(self.line_freq)
+        self.grid_layout.addWidget(self.line_freq, 6, 18, 1, 4)
 
-            row_range = 0
+        self.line_value = QLineEdit(self)
+        self.line_value.setText("Różnica amplitudy")
+        self.line_edits_all.append(self.line_value)
+        self.grid_layout.addWidget(self.line_value, 6, 22, 1, 4)
 
-            if len(top_freqs) > 20:
-                row_range = 20
+        self.line_percent = QLineEdit(self)
+        self.line_percent.setText("Zmiana (%)")
+        self.line_edits_all.append(self.line_percent)
+        self.grid_layout.addWidget(self.line_percent, 6, 26, 1, 4)
+
+        mse = numpy.mean(self.fftdiff ** 2)
+
+
+        top_freqs_c = numpy.where(self.fftdiff[:int(self.csv_standard_length/2)] > mse/4)[0]
+        top_freqs = []
+
+        for freq in top_freqs_c:
+            if freq == 0:
+                if self.fftdiff[freq] > self.fftdiff[freq+1]:
+                    top_freqs.append(freq)
+            elif freq == self.csv_standard_length:
+                if self.fftdiff[freq] > self.fftdiff[freq-1]:
+                    top_freqs.append(freq)
             else:
-                row_range = len(top_freqs)
+                if self.fftdiff[freq] > self.fftdiff[freq-1] and self.fftdiff[freq] > self.fftdiff[freq+1]:
+                    top_freqs.append(freq)
 
-            for row in range(row_range):
-                for col in range(2):
-                    line_edit = QLineEdit(self)
-                    line_edit.setReadOnly(True)
-                    if col == 0:
-                        line_edit.setText(str(top_freqs[row]) + " Hz")
-                        self.grid_layout.addWidget(line_edit, row+7, 20, 1, 4)
-                    elif col == 1:
-                        line_edit.setText(str(round(float(top_values[row]), 3)))
-                        self.grid_layout.addWidget(line_edit, row+7, 24, 1, 4)
-                    self.line_edits.append(line_edit)
-                    self.line_edits_all.append(line_edit)
+        top_values = self.fftdiff[:int(self.csv_standard_length/2)][top_freqs]
+        fft1_values = self.fft1_average[:int(self.csv_standard_length/2)][top_freqs]
+        fft2_values = self.fft2_average[:int(self.csv_standard_length/2)][top_freqs]
+        
+        sorted_pairs = sorted(zip(top_values, top_freqs, fft1_values, fft2_values), reverse=True)
 
-            self.mse_value = QLineEdit(self)
-            self.mse_value.setReadOnly(True)
-            self.mse_value.setText("Średni błąd kwadratowy: " + str(round(float(mse), 4)))
-            self.line_edits_all.append(self.mse_value)
-            self.grid_layout.addWidget(self.mse_value, 28, 20, 1, 8)
+        top_values, top_freqs, fft1_values, fft2_values = zip(*sorted_pairs)
 
-            for line_edit in self.line_edits_all:
-                line_edit.setStyleSheet("""
-                    background-color: #F0F0F0;
-                    border: 1px solid #000000;
-                    font-size: 14px;
-                """)
+        top_values = list(top_values)
+        top_freqs = list(top_freqs)
+        fft1_values = list(fft1_values)
+        fft2_values = list(fft2_values)
 
+        row_range = 0
 
-        elif self.analyze_selector == 0 or self.analyze_selector == 1 or self.analyze_selector == 3 or self.analyze_selector == 4:
-            if hasattr(self, "line_value") and self.line_value is not None:
-                self.line_value.setParent(None)
-                self.line_value.deleteLater()
-                self.line_value = None
-                for line_edit in self.line_edits:
-                    self.grid_layout.removeWidget(line_edit)
-                    line_edit.deleteLater()
-                    line_edit = None
+        if len(top_freqs) > 20:
+            row_range = 20
+        else:
+            row_range = len(top_freqs)
 
-            if hasattr(self, "line_freq") and self.line_freq is not None:
-                self.line_freq.setParent(None)
-                self.line_freq.deleteLater()
-                self.line_freq = None
+        for row in range(row_range):
+            for col in range(3):
+                line_edit = QLineEdit(self)
+                if col == 0:
+                    line_edit.setText(str(top_freqs[row]) + " Hz")
+                    self.grid_layout.addWidget(line_edit, row+7, 18, 1, 4)
+                elif col == 1:
+                    line_edit.setText(str(round(float(top_values[row]), 3)))
+                    self.grid_layout.addWidget(line_edit, row+7, 22, 1, 4)
+                elif col == 2:
+                    if fft1_values[row] > fft2_values[row]:
+                        line_edit.setText((str(round(int(((fft1_values[row]-fft2_values[row])/fft2_values[row])*100))))+"%      [1]")
+                    elif fft2_values[row] > fft1_values[row]:
+                        line_edit.setText((str(round(int(((fft2_values[row]-fft1_values[row])/fft1_values[row])*100))))+"%      [2]")
+                    self.grid_layout.addWidget(line_edit, row+7, 26, 1, 4)
+                self.line_edits.append(line_edit)
+                self.line_edits_all.append(line_edit)
 
-            if hasattr(self, "mse_value") and self.mse_value is not None:
-                self.mse_value.setParent(None)
-                self.mse_value.deleteLater()
-                self.mse_value = None
+        self.mse_value = QLineEdit(self)
+        self.mse_value.setText("Średni błąd kwadratowy: " + str(round(float(mse), 4)))
+        self.line_edits_all.append(self.mse_value)
+        self.grid_layout.addWidget(self.mse_value, 28, 18, 1, 12)
 
+        for line_edit in self.line_edits_all:
+            line_edit.setStyleSheet("""
+                background-color: #F0F0F0;
+                border: 1px solid #000000;
+                font-size: 14px;
+            """)
+            line_edit.setReadOnly(True)
+            line_edit.setFrame(False)
+            
     
     def analyze_mode1b(self):
-        if self.analyze_selector == 4:
+        self.line_edits1b = []
+        self.line_edits1b_all = []
 
-            self.line_edits1b = []
-            self.line_edits1b_all = []
+        self.line_freq1b = QLineEdit(self)
+        self.line_freq1b.setReadOnly(True)
+        self.line_freq1b.setText("Częstotliwość")
+        self.line_edits1b_all.append(self.line_freq1b)
+        self.grid_layout.addWidget(self.line_freq1b, 6, 20, 1, 4)
 
-            self.line_freq1b = QLineEdit(self)
-            self.line_freq1b.setReadOnly(True)
-            self.line_freq1b.setText("Częstotliwość")
-            self.line_edits1b_all.append(self.line_freq1b)
-            self.grid_layout.addWidget(self.line_freq1b, 6, 20, 1, 4)
-
-            self.line_value1b = QLineEdit(self)
-            self.line_value1b.setReadOnly(True)
-            self.line_value1b.setText("Amplituda")
-            self.line_edits1b_all.append(self.line_value1b)
-            self.grid_layout.addWidget(self.line_value1b, 6, 24, 1, 4)
+        self.line_value1b = QLineEdit(self)
+        self.line_value1b.setReadOnly(True)
+        self.line_value1b.setText("Amplituda")
+        self.line_edits1b_all.append(self.line_value1b)
+        self.grid_layout.addWidget(self.line_value1b, 6, 24, 1, 4)
 
 
-            top_freqs_c = numpy.where(self.fft1_average[:int(self.csv_standard_length/2)])[0]
-            top_freqs = []
+        top_freqs_c = numpy.where(self.fft1_average[:int(self.csv_standard_length/2)])[0]
+        top_freqs = []
 
-            for freq in top_freqs_c:
-                if freq == 0:
-                    if self.fft1_average[freq] > self.fft1_average[freq+1]:
-                        top_freqs.append(freq)
-                elif freq == self.csv_standard_length:
-                    if self.fft1_average[freq] > self.fft1_average[freq-1]:
-                        top_freqs.append(freq)
-                else:
-                    if self.fft1_average[freq] > self.fft1_average[freq-1] and self.fft1_average[freq] > self.fft1_average[freq+1]:
-                        top_freqs.append(freq)
-                        print(freq, self.fft1_average[freq], self.fft1_average[freq-1], self.fft1_average[freq+1])
-
-            print(top_freqs)
-            top_values = self.fft1_average[:int(self.csv_standard_length/2)][top_freqs]
-            
-            sorted_pairs = sorted(zip(top_values, top_freqs), reverse=True)
-
-            top_values, top_freqs = zip(*sorted_pairs)
-
-            top_values = list(top_values)
-            top_freqs = list(top_freqs)
-
-            row_range = 0
-
-            if len(top_freqs) > 20:
-                row_range = 20
+        for freq in top_freqs_c:
+            if freq == 0:
+                if self.fft1_average[freq] > self.fft1_average[freq+1]:
+                    top_freqs.append(freq)
+            elif freq == self.csv_standard_length:
+                if self.fft1_average[freq] > self.fft1_average[freq-1]:
+                    top_freqs.append(freq)
             else:
-                row_range = len(top_freqs)
+                if self.fft1_average[freq] > self.fft1_average[freq-1] and self.fft1_average[freq] > self.fft1_average[freq+1]:
+                    top_freqs.append(freq)
 
-            for row in range(row_range):
-                for col in range(2):
-                    line_edit = QLineEdit(self)
-                    line_edit.setReadOnly(True)
-                    if col == 0:
-                        line_edit.setText(str(top_freqs[row]) + " Hz")
-                        self.grid_layout.addWidget(line_edit, row+7, 20, 1, 4)
-                    elif col == 1:
-                        line_edit.setText(str(round(float(top_values[row]), 3)))
-                        self.grid_layout.addWidget(line_edit, row+7, 24, 1, 4)
-                    self.line_edits1b.append(line_edit)
-                    self.line_edits1b_all.append(line_edit)
+        top_values = self.fft1_average[:int(self.csv_standard_length/2)][top_freqs]
+        
+        sorted_pairs = sorted(zip(top_values, top_freqs), reverse=True)
 
-            for line_edit in self.line_edits1b_all:
-                line_edit.setStyleSheet("""
-                    background-color: #F0F0F0;
-                    border: 1px solid #000000;
-                    font-size: 14px;
-                """)
+        top_values, top_freqs = zip(*sorted_pairs)
 
+        top_values = list(top_values)
+        top_freqs = list(top_freqs)
 
-        elif self.analyze_selector == 0 or self.analyze_selector == 1 or self.analyze_selector == 2 or self.analyze_selector == 3:
-            if hasattr(self, "line_value") and self.line_value1b is not None:
-                self.line_value1b.setParent(None)
-                self.line_value1b.deleteLater()
-                self.line_value1b = None
-                for line_edit in self.line_edits1b:
-                    self.grid_layout.removeWidget(line_edit)
-                    line_edit.deleteLater()
-                    line_edit = None
+        row_range = 0
 
-            if hasattr(self, "line_freq") and self.line_freq1b is not None:
-                self.line_freq1b.setParent(None)
-                self.line_freq1b.deleteLater()
-                self.line_freq1b = None
+        if len(top_freqs) > 20:
+            row_range = 20
+        else:
+            row_range = len(top_freqs)
 
+        for row in range(row_range):
+            for col in range(2):
+                line_edit = QLineEdit(self)
+                line_edit.setReadOnly(True)
+                if col == 0:
+                    line_edit.setText(str(top_freqs[row]) + " Hz")
+                    self.grid_layout.addWidget(line_edit, row+7, 20, 1, 4)
+                elif col == 1:
+                    line_edit.setText(str(round(float(top_values[row]), 3)))
+                    self.grid_layout.addWidget(line_edit, row+7, 24, 1, 4)
+                self.line_edits1b.append(line_edit)
+                self.line_edits1b_all.append(line_edit)
+
+        for line_edit in self.line_edits1b_all:
+            line_edit.setStyleSheet("""
+                background-color: #F0F0F0;
+                border: 1px solid #000000;
+                font-size: 14px;
+            """)
+            
     
     def analyze_mode2b(self):
-        if self.analyze_selector == 1:
+        self.line_edits2b = []
+        self.line_edits2b_all = []
 
-            self.line_edits2b = []
-            self.line_edits2b_all = []
+        self.line_freq2b = QLineEdit(self)
+        self.line_freq2b.setReadOnly(True)
+        self.line_freq2b.setText("Częstotliwość")
+        self.line_edits2b_all.append(self.line_freq2b)
+        self.grid_layout.addWidget(self.line_freq2b, 6, 20, 1, 4)
 
-            self.line_freq2b = QLineEdit(self)
-            self.line_freq2b.setReadOnly(True)
-            self.line_freq2b.setText("Częstotliwość")
-            self.line_edits2b_all.append(self.line_freq2b)
-            self.grid_layout.addWidget(self.line_freq2b, 6, 20, 1, 4)
-
-            self.line_value2b = QLineEdit(self)
-            self.line_value2b.setReadOnly(True)
-            self.line_value2b.setText("Amplituda")
-            self.line_edits2b_all.append(self.line_value2b)
-            self.grid_layout.addWidget(self.line_value2b, 6, 24, 1, 4)
+        self.line_value2b = QLineEdit(self)
+        self.line_value2b.setReadOnly(True)
+        self.line_value2b.setText("Amplituda")
+        self.line_edits2b_all.append(self.line_value2b)
+        self.grid_layout.addWidget(self.line_value2b, 6, 24, 1, 4)
 
 
-            top_freqs_c = numpy.where(self.fft2_average[:int(self.csv_standard_length/2)])[0]
-            top_freqs = []
+        top_freqs_c = numpy.where(self.fft2_average[:int(self.csv_standard_length/2)])[0]
+        top_freqs = []
 
-            for freq in top_freqs_c:
-                if freq == 0:
-                    if self.fft2_average[freq] > self.fft2_average[freq+1]:
-                        top_freqs.append(freq)
-                elif freq == self.csv_standard_length:
-                    if self.fft2_average[freq] > self.fft2_average[freq-1]:
-                        top_freqs.append(freq)
-                else:
-                    if self.fft2_average[freq] > self.fft2_average[freq-1] and self.fft2_average[freq] > self.fft2_average[freq+1]:
-                        top_freqs.append(freq)
-                        print(freq, self.fft2_average[freq], self.fft2_average[freq-1], self.fft2_average[freq+1])
-
-            print(top_freqs)
-            top_values = self.fft2_average[:int(self.csv_standard_length/2)][top_freqs]
-            
-            sorted_pairs = sorted(zip(top_values, top_freqs), reverse=True)
-
-            top_values, top_freqs = zip(*sorted_pairs)
-
-            top_values = list(top_values)
-            top_freqs = list(top_freqs)
-
-            row_range = 0
-
-            if len(top_freqs) > 20:
-                row_range = 20
+        for freq in top_freqs_c:
+            if freq == 0:
+                if self.fft2_average[freq] > self.fft2_average[freq+1]:
+                    top_freqs.append(freq)
+            elif freq == self.csv_standard_length:
+                if self.fft2_average[freq] > self.fft2_average[freq-1]:
+                    top_freqs.append(freq)
             else:
-                row_range = len(top_freqs)
+                if self.fft2_average[freq] > self.fft2_average[freq-1] and self.fft2_average[freq] > self.fft2_average[freq+1]:
+                    top_freqs.append(freq)
 
-            for row in range(row_range):
-                for col in range(2):
-                    line_edit = QLineEdit(self)
-                    line_edit.setReadOnly(True)
-                    if col == 0:
-                        line_edit.setText(str(top_freqs[row]) + " Hz")
-                        self.grid_layout.addWidget(line_edit, row+7, 20, 1, 4)
-                    elif col == 1:
-                        line_edit.setText(str(round(float(top_values[row]), 3)))
-                        self.grid_layout.addWidget(line_edit, row+7, 24, 1, 4)
-                    self.line_edits2b.append(line_edit)
-                    self.line_edits2b_all.append(line_edit)
+        top_values = self.fft2_average[:int(self.csv_standard_length/2)][top_freqs]
+        
+        sorted_pairs = sorted(zip(top_values, top_freqs), reverse=True)
 
-            for line_edit in self.line_edits2b_all:
-                line_edit.setStyleSheet("""
-                    background-color: #F0F0F0;
-                    border: 1px solid #000000;
-                    font-size: 14px;
-                """)
+        top_values, top_freqs = zip(*sorted_pairs)
+
+        top_values = list(top_values)
+        top_freqs = list(top_freqs)
+
+        row_range = 0
+
+        if len(top_freqs) > 20:
+            row_range = 20
+        else:
+            row_range = len(top_freqs)
+
+        for row in range(row_range):
+            for col in range(2):
+                line_edit = QLineEdit(self)
+                line_edit.setReadOnly(True)
+                if col == 0:
+                    line_edit.setText(str(top_freqs[row]) + " Hz")
+                    self.grid_layout.addWidget(line_edit, row+7, 20, 1, 4)
+                elif col == 1:
+                    line_edit.setText(str(round(float(top_values[row]), 3)))
+                    self.grid_layout.addWidget(line_edit, row+7, 24, 1, 4)
+                self.line_edits2b.append(line_edit)
+                self.line_edits2b_all.append(line_edit)
+
+        for line_edit in self.line_edits2b_all:
+            line_edit.setStyleSheet("""
+                background-color: #F0F0F0;
+                border: 1px solid #000000;
+                font-size: 14px;
+            """)
 
 
-        elif self.analyze_selector == 0 or self.analyze_selector == 2 or self.analyze_selector == 3 or self.analyze_selector == 4:
-            if hasattr(self, "line_value") and self.line_value2b is not None:
-                self.line_value2b.setParent(None)
-                self.line_value2b.deleteLater()
-                self.line_value2b = None
-                for line_edit in self.line_edits2b:
-                    self.grid_layout.removeWidget(line_edit)
-                    line_edit.deleteLater()
-                    line_edit = None
+    def analyze_mode_compare(self):
+        self.plot_fftcompare_widget = QWidget(self)
+        self.plot_fftcompare_layout = QVBoxLayout(self.plot_fftcompare_widget)
 
-            if hasattr(self, "line_freq") and self.line_freq2b is not None:
-                self.line_freq2b.setParent(None)
-                self.line_freq2b.deleteLater()
-                self.line_freq2b = None
+        self.plot_fftcompare_canvas = FigureCanvas(Figure(figsize=(5, 3)))
+
+        self.fftcompare_toolbar = NavigationToolbar2QT(self.plot_fftcompare_canvas, self)
+        self.plot_fftcompare_layout.addWidget(self.fftcompare_toolbar)
+
+        self.plot_fftcompare_layout.addWidget(self.plot_fftcompare_canvas)
+
+        self.grid_layout.addWidget(self.plot_fftcompare_widget, 4, 0, 28, 16)
+
+        ax = self.plot_fftcompare_canvas.figure.add_subplot(111)
+
+        smooth_fft1 = self.fft1_average.copy()
+        smooth_fft2 = self.fft2_average.copy()
+
+        #smooth_fft1 = savgol_filter(self.fft1_average, window_length=13, polyorder=2)
+        #smooth_fft1 = numpy.clip(smooth_fft1, 0, None)
+        #smooth_fft2 = savgol_filter(self.fft2_average, window_length=13, polyorder=2)
+        #smooth_fft2 = numpy.clip(smooth_fft2, 0, None)
+
+        ax.clear()
+        ax.plot(self.xf1[:self.csv_standard_length//2], smooth_fft1[:self.csv_standard_length//2], marker='o', linestyle='-', markersize=1)
+        ax.plot(self.xf1[:self.csv_standard_length//2], smooth_fft2[:self.csv_standard_length//2], marker='o', linestyle='-', markersize=1)
+
+        ax.fill_between(self.xf1[:self.csv_standard_length//2], smooth_fft1[:self.csv_standard_length//2], smooth_fft2[:self.csv_standard_length//2], where=(smooth_fft1[:self.csv_standard_length//2] > smooth_fft2[:self.csv_standard_length//2]), interpolate=True)
+        ax.fill_between(self.xf1[:self.csv_standard_length//2], smooth_fft1[:self.csv_standard_length//2], smooth_fft2[:self.csv_standard_length//2], where=(smooth_fft1[:self.csv_standard_length//2] < smooth_fft2[:self.csv_standard_length//2]), interpolate=True)
+
+        ax.set_xlabel("Częstotliwość (Hz)")
+        ax.set_ylabel("Amplituda")
+        ax.set_title("Analiza FFT - porównanie " + self.analyze_folders[0] + " | " + self.analyze_folders[1])
+
+        self.plot_fftcompare_canvas.draw()        
+
+
+    def clear_all(self):
+        if hasattr(self, "plot_fft1_widget") and self.plot_fft1_widget is not None:
+            self.plot_fft1_widget.setParent(None)
+            self.plot_fft1_widget.deleteLater()
+            self.plot_fft1_widget = None
+
+        if hasattr(self, "plot_fft2_widget") and self.plot_fft2_widget is not None:
+            self.plot_fft2_widget.setParent(None)
+            self.plot_fft2_widget.deleteLater()
+            self.plot_fft2_widget = None
+
+        if hasattr(self, "plot_fft3_widget") and self.plot_fft3_widget is not None:
+            self.plot_fft3_widget.setParent(None)
+            self.plot_fft3_widget.deleteLater()
+            self.plot_fft3_widget = None
+
+        if hasattr(self, "plot_fftcompare_widget") and self.plot_fftcompare_widget is not None:
+            self.plot_fftcompare_widget.setParent(None)
+            self.plot_fftcompare_widget.deleteLater()
+            self.plot_fftcompare_widget = None
+
+        if hasattr(self, "line_value") and self.line_value is not None:
+            self.line_value.setParent(None)
+            self.line_value.deleteLater()
+            self.line_value = None
+            for line_edit in self.line_edits:
+                self.grid_layout.removeWidget(line_edit)
+                line_edit.deleteLater()
+                line_edit = None
+
+        if hasattr(self, "line_freq") and self.line_freq is not None:
+            self.line_freq.setParent(None)
+            self.line_freq.deleteLater()
+            self.line_freq = None
+
+        if hasattr(self, "line_percent") and self.line_percent is not None:
+            self.line_percent.setParent(None)
+            self.line_percent.deleteLater()
+            self.line_percent = None
+
+        if hasattr(self, "mse_value") and self.mse_value is not None:
+            self.mse_value.setParent(None)
+            self.mse_value.deleteLater()
+            self.mse_value = None
+
+        if hasattr(self, "line_value") and self.line_value1b is not None:
+            self.line_value1b.setParent(None)
+            self.line_value1b.deleteLater()
+            self.line_value1b = None
+            for line_edit in self.line_edits1b:
+                self.grid_layout.removeWidget(line_edit)
+                line_edit.deleteLater()
+                line_edit = None
+
+        if hasattr(self, "line_freq") and self.line_freq1b is not None:
+            self.line_freq1b.setParent(None)
+            self.line_freq1b.deleteLater()
+            self.line_freq1b = None
+
+        if hasattr(self, "line_value") and self.line_value2b is not None:
+            self.line_value2b.setParent(None)
+            self.line_value2b.deleteLater()
+            self.line_value2b = None
+            for line_edit in self.line_edits2b:
+                self.grid_layout.removeWidget(line_edit)
+                line_edit.deleteLater()
+                line_edit = None
+
+        if hasattr(self, "line_freq") and self.line_freq2b is not None:
+            self.line_freq2b.setParent(None)
+            self.line_freq2b.deleteLater()
+            self.line_freq2b = None
 
 
     def analyze_mode_selector(self):
@@ -844,33 +871,31 @@ class Cockpit(QMainWindow):
             print("Brak możliwości zmiany trybu analizy")
             new_value = 0
         elif self.analyze_selector == 1:
-            self.analyze_mode1()
-            self.analyze_mode1b()
+            self.clear_all()
             self.analyze_mode2()
             self.analyze_mode2b()
             new_value = 2
         elif self.analyze_selector == 2:
-            self.analyze_mode2()
-            self.analyze_mode2b()
+            self.clear_all()
             self.analyze_mode3()
             self.analyze_mode4()
             new_value = 3
         elif self.analyze_selector == 3:
-            self.analyze_mode3()
+            self.clear_all()
+            self.analyze_mode_compare()
             self.analyze_mode4()
-            self.analyze_mode1()
-            self.analyze_mode2()
             new_value = 4
         elif self.analyze_selector == 4:
+            self.clear_all()
+            self.analyze_mode1()
             self.analyze_mode2()
+            new_value = 5
+        elif self.analyze_selector == 5:
+            self.clear_all()
             self.analyze_mode1()
             self.analyze_mode1b()
             new_value = 1
         self.analyze_selector = new_value
-        
-
-
-
         
 
 if __name__ == "__main__":
