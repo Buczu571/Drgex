@@ -15,6 +15,7 @@ from PyQt6.QtCore import Qt, QTimer
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT
 from matplotlib.figure import Figure
+import random
 
 class SerialReader(QMainWindow):
     def __init__(self, selected_machine, selected_measurment):
@@ -151,7 +152,18 @@ class SerialReader(QMainWindow):
 
         self.spectrogram_button = QPushButton("Spektrogram")
         self.spectrogram_button.clicked.connect(self.spectrogram)
-        grid_layout.addWidget(self.spectrogram_button, 1, 20, 1, 4)
+        grid_layout.addWidget(self.spectrogram_button, 1, 8, 1, 4)
+
+
+        samplesno_label = QLabel("Wiele próbek")
+        grid_layout.addWidget(samplesno_label, 1, 16, 1, 2)
+
+        self.samplesno_checkbox = QCheckBox()
+        grid_layout.addWidget(self.samplesno_checkbox, 1, 18, 1, 2)
+
+        self.samplesno_input = QLineEdit()
+        self.samplesno_input.setPlaceholderText("Ilość próbek")
+        grid_layout.addWidget(self.samplesno_input, 1, 20, 1, 4)
 
         central_widget.setLayout(grid_layout)
 
@@ -195,78 +207,156 @@ class SerialReader(QMainWindow):
 
         ser = serial.Serial(PORT, BAUDRATE, timeout=TIMEOUT)
 
-        start_time = time.time()
-        end_time = time_value
-        data = []
-        err_no = 0
-        
-        while time.time() - start_time < end_time:
-            self.text_field_4.setText(str(end_time - start_time))
-            raw_data = ser.read(2)
-            if len(raw_data) == 2:
-                adc_value = struct.unpack('<h', raw_data)[0]
-                if adc_value < 0 or adc_value > 4095:
-                    print("ADC Value Error", adc_value)
-                    err_no = err_no + 1
-                    ser.close()
-                    time.sleep(0.1)
-                    ser.open()
-                    start_time = time.time()
-                    data = []
-                else:
-                    data.append(adc_value)
-
-        print("Zakończono odbieranie danych.", len(data), err_no)
-        self.text_field_4.setText("")
-
-        self.export_data = data.copy()
-        self.export_data.insert(0,int(len(self.export_data)/time_value))
-
-        self.spectrogram_data = data.copy()
-        self.spectrogram_data.insert(0,int(len(self.export_data)/time_value))
-
-        data = numpy.array(data, dtype=float)
-        self.plot_values_data(data)
-
-        if self.notch_checkbox.isChecked():
+        if self.samplesno_checkbox.isChecked():
             try:
-                freq_value = int(self.freq_input.text())
-                if freq_value <= 0:
-                    print("Błąd: Częstotliwość filtru musi być liczbą większą od zera!")
+                samplesno_value = int(self.samplesno_input.text())
+                if samplesno_value <= 0:
+                    print("Błąd: Liczba próbek musi być liczbą większą od zera!")
                     return
             except ValueError:
-                print("Błąd: Częstotliwość filtru musi być liczbą całkowitą!")
+                print("Błąd: Liczba próbek musi być liczbą całkowitą!")
                 return
             
-            try:
-                pow_value = int(self.pow_input.text())
-                if pow_value <= 0:
-                    print("Błąd: Moc tłumienia filtru musi być liczbą większą od zera!")
+            if self.selected_machine == None or self.selected_measurment == None:
+                print("Błąd: Brak wybranej maszyny lub zestawu danych")
+                return
+            
+            for i in range(0, samplesno_value):
+                self.text_field_4.setText(str(i+1))
+                start_time = time.time()
+                end_time = time_value
+                data = []
+                err_no = 0
+                
+                while time.time() - start_time < end_time:
+                    raw_data = ser.read(2)
+                    if len(raw_data) == 2:
+                        adc_value = struct.unpack('<h', raw_data)[0]
+                        if adc_value < 0 or adc_value > 4095:
+                            print("ADC Value Error", adc_value)
+                            err_no = err_no + 1
+                            ser.close()
+                            time.sleep(0.1)
+                            ser.open()
+                            start_time = time.time()
+                            data = []
+                        else:
+                            data.append(adc_value)
+
+                print("Zakończono odbieranie danych.", len(data), err_no)
+
+                self.export_data = data.copy()
+                self.export_data.insert(0,int(len(self.export_data)/time_value))
+
+                self.spectrogram_data = data.copy()
+                self.spectrogram_data.insert(0,int(len(self.export_data)/time_value))
+
+                data = numpy.array(data, dtype=float)
+
+                if self.notch_checkbox.isChecked():
+                    try:
+                        freq_value = int(self.freq_input.text())
+                        if freq_value <= 0:
+                            print("Błąd: Częstotliwość filtru musi być liczbą większą od zera!")
+                            return
+                    except ValueError:
+                        print("Błąd: Częstotliwość filtru musi być liczbą całkowitą!")
+                        return
+                    
+                    try:
+                        pow_value = int(self.pow_input.text())
+                        if pow_value <= 0:
+                            print("Błąd: Moc tłumienia filtru musi być liczbą większą od zera!")
+                            return
+                    except ValueError:
+                        print("Błąd: Moc tłumienia filtru musi być liczbą całkowitą!")
+                        return
+                    
+                    data = self.notch_filter(data, freq_value, int(len(data)/time_value), pow_value)
+
+                base_dir = os.path.dirname(os.path.abspath(__file__))
+                file_name = os.path.join(base_dir, self.selected_machine, self.selected_measurment, str(str(i+1)+".csv"))
+
+                if file_name:
+                    with open(file_name, mode="w", newline="") as file:
+                        writer = csv.writer(file)
+                        for value in self.export_data:
+                            writer.writerow([value])
+                    print(f"Plik zapisany jako {file_name}")
+
+        else:
+            start_time = time.time()
+            end_time = time_value
+            data = []
+            err_no = 0
+            
+            while time.time() - start_time < end_time:
+                self.text_field_4.setText(str(end_time - start_time))
+                raw_data = ser.read(2)
+                if len(raw_data) == 2:
+                    adc_value = struct.unpack('<h', raw_data)[0]
+                    if adc_value < 0 or adc_value > 4095:
+                        print("ADC Value Error", adc_value)
+                        err_no = err_no + 1
+                        ser.close()
+                        time.sleep(0.1)
+                        ser.open()
+                        start_time = time.time()
+                        data = []
+                    else:
+                        data.append(adc_value)
+
+            print("Zakończono odbieranie danych.", len(data), err_no)
+            self.text_field_4.setText("")
+
+            self.export_data = data.copy()
+            self.export_data.insert(0,int(len(self.export_data)/time_value))
+
+            self.spectrogram_data = data.copy()
+            self.spectrogram_data.insert(0,int(len(self.export_data)/time_value))
+
+            data = numpy.array(data, dtype=float)
+            self.plot_values_data(data)
+
+            if self.notch_checkbox.isChecked():
+                try:
+                    freq_value = int(self.freq_input.text())
+                    if freq_value <= 0:
+                        print("Błąd: Częstotliwość filtru musi być liczbą większą od zera!")
+                        return
+                except ValueError:
+                    print("Błąd: Częstotliwość filtru musi być liczbą całkowitą!")
                     return
-            except ValueError:
-                print("Błąd: Moc tłumienia filtru musi być liczbą całkowitą!")
-                return
-            
-            data = self.notch_filter(data, freq_value, int(len(data)/time_value), pow_value)
+                
+                try:
+                    pow_value = int(self.pow_input.text())
+                    if pow_value <= 0:
+                        print("Błąd: Moc tłumienia filtru musi być liczbą większą od zera!")
+                        return
+                except ValueError:
+                    print("Błąd: Moc tłumienia filtru musi być liczbą całkowitą!")
+                    return
+                
+                data = self.notch_filter(data, freq_value, int(len(data)/time_value), pow_value)
 
-        data_fft = list(map(int, data))
-        print(numpy.mean(data_fft))
+            data_fft = list(map(int, data))
+            print(numpy.mean(data_fft))
 
-        self.text_field_1.setText(str(len(data)))
-        self.text_field_2.setText(str(int(len(data)/time_value)))
-        self.text_field_3.setText(f"{float(numpy.mean(data_fft)):.2f}")
+            self.text_field_1.setText(str(len(data)))
+            self.text_field_2.setText(str(int(len(data)/time_value)))
+            self.text_field_3.setText(f"{float(numpy.mean(data_fft)):.2f}")
 
-        data_fft = [(i / 4096) * 3.3 for i in data_fft]
+            data_fft = [(i / 4096) * 3.3 for i in data_fft]
 
-        data_fft = numpy.array(data_fft) - numpy.mean(data_fft)
+            data_fft = numpy.array(data_fft) - numpy.mean(data_fft)
 
-        yf = numpy.fft.fft(data_fft)
-        yf = numpy.abs(yf) * 2048 / len(data_fft)
-        xf = numpy.fft.fftfreq(len(data_fft), 1/(len(data_fft)/time_value))
+            yf = numpy.fft.fft(data_fft)
+            yf = numpy.abs(yf) * 2048 / len(data_fft)
+            xf = numpy.fft.fftfreq(len(data_fft), 1/(len(data_fft)/time_value))
 
-        print(len(data_fft),len(data_fft)/time_value)
+            print(len(data_fft),len(data_fft)/time_value)
 
-        self.plot_fft_data(data_fft, yf, xf)
+            self.plot_fft_data(data_fft, yf, xf)
 
     def stop_button(self):
         #MT

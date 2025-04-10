@@ -1,4 +1,0 @@
-Nazwa maszyny: wiertarka
-Dane techniczne: fh
-Lokalizacja: kuchnia
-Dodatkowe informacje: cos

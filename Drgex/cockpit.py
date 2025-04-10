@@ -47,6 +47,8 @@ class Cockpit(QMainWindow):
         self.analyze_selector = 0
         self.analyze_folders = None
 
+        self.values_percent_selector = 0
+
         self.grid_layout = QGridLayout()
 
         for row in range(32):
@@ -549,10 +551,8 @@ class Cockpit(QMainWindow):
         self.line_edits_all.append(self.line_percent)
         self.grid_layout.addWidget(self.line_percent, 6, 26, 1, 4)
 
-        mse = numpy.mean(self.fftdiff ** 2)
 
-
-        top_freqs_c = numpy.where(self.fftdiff[:int(self.csv_standard_length/2)] > mse/4)[0]
+        top_freqs_c = numpy.where(self.fftdiff[:int(self.csv_standard_length/2)] > 0.1)[0]
         top_freqs = []
 
         for freq in top_freqs_c:
@@ -569,15 +569,21 @@ class Cockpit(QMainWindow):
         top_values = self.fftdiff[:int(self.csv_standard_length/2)][top_freqs]
         fft1_values = self.fft1_average[:int(self.csv_standard_length/2)][top_freqs]
         fft2_values = self.fft2_average[:int(self.csv_standard_length/2)][top_freqs]
-        
-        sorted_pairs = sorted(zip(top_values, top_freqs, fft1_values, fft2_values), reverse=True)
 
-        top_values, top_freqs, fft1_values, fft2_values = zip(*sorted_pairs)
+        min_values = numpy.minimum(fft1_values, fft2_values)
+        max_values = numpy.maximum(fft1_values, fft2_values)
+        top_percent = ((max_values - min_values) / min_values) * 100
+
+        top_fft_list = numpy.where(fft1_values > fft2_values, 1, 2)
+        
+        sorted_pairs = sorted(zip(top_values, top_freqs, top_percent, top_fft_list), reverse=True)
+
+        top_values, top_freqs, top_percent, top_fft_list = zip(*sorted_pairs)
 
         top_values = list(top_values)
         top_freqs = list(top_freqs)
-        fft1_values = list(fft1_values)
-        fft2_values = list(fft2_values)
+        top_percent = list(top_percent)
+        top_fft_list = list(top_fft_list)
 
         row_range = 0
 
@@ -596,18 +602,103 @@ class Cockpit(QMainWindow):
                     line_edit.setText(str(round(float(top_values[row]), 3)))
                     self.grid_layout.addWidget(line_edit, row+7, 22, 1, 4)
                 elif col == 2:
-                    if fft1_values[row] > fft2_values[row]:
-                        line_edit.setText((str(round(int(((fft1_values[row]-fft2_values[row])/fft2_values[row])*100))))+"%      [1]")
-                    elif fft2_values[row] > fft1_values[row]:
-                        line_edit.setText((str(round(int(((fft2_values[row]-fft1_values[row])/fft1_values[row])*100))))+"%      [2]")
+                    line_edit.setText(str(int(top_percent[row]))+"%"+"      "+"["+str(top_fft_list[row])+"]")
                     self.grid_layout.addWidget(line_edit, row+7, 26, 1, 4)
                 self.line_edits.append(line_edit)
                 self.line_edits_all.append(line_edit)
 
-        self.mse_value = QLineEdit(self)
-        self.mse_value.setText("Średni błąd kwadratowy: " + str(round(float(mse), 4)))
-        self.line_edits_all.append(self.mse_value)
-        self.grid_layout.addWidget(self.mse_value, 28, 18, 1, 12)
+        self.values_percent_compare_btn = QPushButton("Sortuj od najwyższych %")
+        self.values_percent_compare_btn.clicked.connect(self.values_percent_mode_selector)
+        self.grid_layout.addWidget(self.values_percent_compare_btn, 28, 26, 1, 4)
+
+        for line_edit in self.line_edits_all:
+            line_edit.setStyleSheet("""
+                background-color: #F0F0F0;
+                border: 1px solid #000000;
+                font-size: 14px;
+            """)
+            line_edit.setReadOnly(True)
+            line_edit.setFrame(False)
+
+
+    def analyze_mode4b(self):
+        self.line_edits = []
+        self.line_edits_all = []
+
+        self.line_freq = QLineEdit(self)
+        self.line_freq.setText("Częstotliwość")
+        self.line_edits_all.append(self.line_freq)
+        self.grid_layout.addWidget(self.line_freq, 6, 18, 1, 4)
+
+        self.line_value = QLineEdit(self)
+        self.line_value.setText("Różnica amplitudy")
+        self.line_edits_all.append(self.line_value)
+        self.grid_layout.addWidget(self.line_value, 6, 22, 1, 4)
+
+        self.line_percent = QLineEdit(self)
+        self.line_percent.setText("Zmiana (%)")
+        self.line_edits_all.append(self.line_percent)
+        self.grid_layout.addWidget(self.line_percent, 6, 26, 1, 4)
+
+
+        top_freqs_c = numpy.where(self.fftdiff[:int(self.csv_standard_length/2)] > 0.1)[0]
+        top_freqs = []
+
+        for freq in top_freqs_c:
+            if freq == 0:
+                if self.fftdiff[freq] > self.fftdiff[freq+1]:
+                    top_freqs.append(freq)
+            elif freq == self.csv_standard_length:
+                if self.fftdiff[freq] > self.fftdiff[freq-1]:
+                    top_freqs.append(freq)
+            else:
+                if self.fftdiff[freq] > self.fftdiff[freq-1] and self.fftdiff[freq] > self.fftdiff[freq+1]:
+                    top_freqs.append(freq)
+
+        top_values = self.fftdiff[:int(self.csv_standard_length/2)][top_freqs]
+        fft1_values = self.fft1_average[:int(self.csv_standard_length/2)][top_freqs]
+        fft2_values = self.fft2_average[:int(self.csv_standard_length/2)][top_freqs]
+
+        min_values = numpy.minimum(fft1_values, fft2_values)
+        max_values = numpy.maximum(fft1_values, fft2_values)
+        top_percent = ((max_values - min_values) / min_values) * 100
+
+        top_fft_list = numpy.where(fft1_values > fft2_values, 1, 2)
+
+        sorted_pairs = sorted(zip(top_percent, top_values, top_freqs, top_fft_list), reverse=True)
+
+        top_percent, top_values, top_freqs, top_fft_list = zip(*sorted_pairs)
+
+        top_percent = list(top_percent)
+        top_values = list(top_values)
+        top_freqs = list(top_freqs)
+        top_fft_list = list(top_fft_list)
+
+        row_range = 0
+
+        if len(top_freqs) > 20:
+            row_range = 20
+        else:
+            row_range = len(top_freqs)
+
+        for row in range(row_range):
+            for col in range(3):
+                line_edit = QLineEdit(self)
+                if col == 0:
+                    line_edit.setText(str(top_freqs[row]) + " Hz")
+                    self.grid_layout.addWidget(line_edit, row+7, 18, 1, 4)
+                elif col == 1:
+                    line_edit.setText(str(round(float(top_values[row]), 3)))
+                    self.grid_layout.addWidget(line_edit, row+7, 22, 1, 4)
+                elif col == 2:
+                    line_edit.setText(str(int(top_percent[row]))+"%"+"      "+"["+str(top_fft_list[row])+"]")
+                    self.grid_layout.addWidget(line_edit, row+7, 26, 1, 4)
+                self.line_edits.append(line_edit)
+                self.line_edits_all.append(line_edit)
+
+        self.values_percent_compare_btn = QPushButton("Sortuj od najwyższych wartości")
+        self.values_percent_compare_btn.clicked.connect(self.values_percent_mode_selector)
+        self.grid_layout.addWidget(self.values_percent_compare_btn, 28, 26, 1, 4)
 
         for line_edit in self.line_edits_all:
             line_edit.setStyleSheet("""
@@ -636,7 +727,7 @@ class Cockpit(QMainWindow):
         self.grid_layout.addWidget(self.line_value1b, 6, 24, 1, 4)
 
 
-        top_freqs_c = numpy.where(self.fft1_average[:int(self.csv_standard_length/2)])[0]
+        top_freqs_c = numpy.where(self.fft1_average[:int(self.csv_standard_length/2)] > 0.1)[0]
         top_freqs = []
 
         for freq in top_freqs_c:
@@ -704,7 +795,7 @@ class Cockpit(QMainWindow):
         self.grid_layout.addWidget(self.line_value2b, 6, 24, 1, 4)
 
 
-        top_freqs_c = numpy.where(self.fft2_average[:int(self.csv_standard_length/2)])[0]
+        top_freqs_c = numpy.where(self.fft2_average[:int(self.csv_standard_length/2)] > 0.1)[0]
         top_freqs = []
 
         for freq in top_freqs_c:
@@ -832,10 +923,10 @@ class Cockpit(QMainWindow):
             self.line_percent.deleteLater()
             self.line_percent = None
 
-        if hasattr(self, "mse_value") and self.mse_value is not None:
-            self.mse_value.setParent(None)
-            self.mse_value.deleteLater()
-            self.mse_value = None
+        if hasattr(self, "values_percent_compare_btn") and self.values_percent_compare_btn is not None:
+            self.values_percent_compare_btn.setParent(None)
+            self.values_percent_compare_btn.deleteLater()
+            self.values_percent_compare_btn = None
 
         if hasattr(self, "line_value") and self.line_value1b is not None:
             self.line_value1b.setParent(None)
@@ -872,30 +963,57 @@ class Cockpit(QMainWindow):
             new_value = 0
         elif self.analyze_selector == 1:
             self.clear_all()
-            self.analyze_mode2()
-            self.analyze_mode2b()
+            self.analyze_mode2()    #Wykres drugiego zestawu
+            self.analyze_mode2b()   #Najwieksze wartości drugiego zestawu
             new_value = 2
         elif self.analyze_selector == 2:
             self.clear_all()
-            self.analyze_mode3()
-            self.analyze_mode4()
+            self.analyze_mode3()    #Wykres roznic pomiędzy zestawami
+            self.analyze_mode4()    #Najwieksze roznice między zestawami pod wzgledem wartosci
             new_value = 3
         elif self.analyze_selector == 3:
             self.clear_all()
-            self.analyze_mode_compare()
-            self.analyze_mode4()
+            self.analyze_mode_compare() #Wykres porownujący z dwoma zestawami
+            self.analyze_mode4()    #Najwieksze roznice między zestawami pod wzgledem wartosci
             new_value = 4
         elif self.analyze_selector == 4:
             self.clear_all()
-            self.analyze_mode1()
-            self.analyze_mode2()
+            self.analyze_mode1()    #Wykres pierwszego zestawu
+            self.analyze_mode2()    #Wykres drugiego zestawu
             new_value = 5
         elif self.analyze_selector == 5:
             self.clear_all()
-            self.analyze_mode1()
-            self.analyze_mode1b()
+            self.analyze_mode1()    #Wykres pierwszego zestawu
+            self.analyze_mode1b()   #Najwieksze wartości pierwszego zestawu
             new_value = 1
         self.analyze_selector = new_value
+        self.values_percent_selector = 0
+
+
+    def values_percent_mode_selector(self):
+        if self.analyze_selector == 3:
+            if self.values_percent_selector == 0:
+                self.clear_all()
+                self.analyze_mode3()
+                self.analyze_mode4b()
+                new_value = 1
+            elif self.values_percent_selector == 1:
+                self.clear_all()
+                self.analyze_mode3()
+                self.analyze_mode4()
+                new_value = 0
+        elif self.analyze_selector == 4:
+            if self.values_percent_selector == 0:
+                self.clear_all()
+                self.analyze_mode_compare()
+                self.analyze_mode4b()
+                new_value = 1
+            elif self.values_percent_selector == 1:
+                self.clear_all()
+                self.analyze_mode_compare()
+                self.analyze_mode4()
+                new_value = 0
+        self.values_percent_selector = new_value
         
 
 if __name__ == "__main__":

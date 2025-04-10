@@ -1,4 +1,0 @@
-Nazwa maszyny: kosiarka
-Dane techniczne: kosi
-Lokalizacja: pole
-Dodatkowe informacje: kosi tak
