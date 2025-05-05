@@ -8,6 +8,9 @@ import matplotlib.pyplot as plt
 import csv
 import os
 import scipy.signal
+import tensorflow as tf
+from keras.api.models import *
+from keras.api.layers import *
 from scipy.signal import iirnotch
 from scipy.signal import filtfilt
 from PyQt6.QtWidgets import QApplication, QMainWindow, QWidget, QGridLayout, QPushButton, QComboBox, QLabel, QLineEdit, QCheckBox, QVBoxLayout, QSpacerItem, QSizePolicy, QFileDialog
@@ -15,7 +18,7 @@ from PyQt6.QtCore import Qt, QTimer
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT
 from matplotlib.figure import Figure
-import random
+
 
 class SerialReader(QMainWindow):
     def __init__(self, selected_machine, selected_measurment):
@@ -93,7 +96,7 @@ class SerialReader(QMainWindow):
 
         self.plot_values_layout.addWidget(self.plot_values_canvas)
 
-        grid_layout.addWidget(self.plot_values_widget, 2, 0, 30, 16)
+        grid_layout.addWidget(self.plot_values_widget, 2, 4, 30, 14)
 
         self.plot_fft_widget = QWidget(self)
         self.plot_fft_layout = QVBoxLayout(self.plot_fft_widget)
@@ -105,7 +108,7 @@ class SerialReader(QMainWindow):
 
         self.plot_fft_layout.addWidget(self.plot_fft_canvas)
 
-        grid_layout.addWidget(self.plot_fft_widget, 2, 16, 30, 16)
+        grid_layout.addWidget(self.plot_fft_widget, 2, 18, 30, 14)
 
         self.text_field_1 = QLineEdit(self)
         self.text_field_2 = QLineEdit(self)
@@ -164,6 +167,31 @@ class SerialReader(QMainWindow):
         self.samplesno_input = QLineEdit()
         self.samplesno_input.setPlaceholderText("Ilość próbek")
         grid_layout.addWidget(self.samplesno_input, 1, 20, 1, 4)
+
+        prediction_label = QLabel("Obliczanie prawdopodobieństwa nieprawidłowości")
+        grid_layout.addWidget(prediction_label, 2, 0, 1, 3)
+
+        self.preditction_checkbox = QCheckBox()
+        grid_layout.addWidget(self.preditction_checkbox, 2, 3, 1, 1)
+
+        expectedrpm_label = QLabel("Zakładane RPM")
+        grid_layout.addWidget(expectedrpm_label, 3, 0, 1, 2)
+
+        self.expectedrpm_input = QLineEdit()
+        self.expectedrpm_input.setPlaceholderText("RPM")
+        grid_layout.addWidget(self.expectedrpm_input, 3, 2, 1, 2)
+
+        pred_imbalance_label = QLabel("Niewyważenie [%]")
+        grid_layout.addWidget(pred_imbalance_label, 4, 0, 1, 2)
+
+        self.imblanace_value = QLineEdit(self)
+        self.imblanace_value.setReadOnly(True)
+        grid_layout.addWidget(self.imblanace_value, 4, 2, 1, 2)
+
+        self.imblanace_value.setStyleSheet("""
+            background-color: #E0E0E0;
+            border: 1px solid #000000;
+        """)
 
         central_widget.setLayout(grid_layout)
 
@@ -318,6 +346,18 @@ class SerialReader(QMainWindow):
             data = numpy.array(data, dtype=float)
             self.plot_values_data(data)
 
+            if self.preditction_checkbox.isChecked():
+                try:
+                    expectedrpm_input = int(self.expectedrpm_input.text())
+                    if expectedrpm_input <= 0:
+                        print("Błąd: Zakładane RPM musi być liczbą większą od zera!")
+                        return
+                except ValueError:
+                    print("Błąd: Zakładane RPM musi być liczbą całkowitą!")
+                    return
+                
+                self.predict(data, expectedrpm_input)
+
             if self.notch_checkbox.isChecked():
                 try:
                     freq_value = int(self.freq_input.text())
@@ -390,6 +430,9 @@ class SerialReader(QMainWindow):
     def notch_filter(self, data, freq, fs, quality):
         b, a = iirnotch(freq, quality, fs)
         return filtfilt(b, a, data)
+
+    def gaussian_filter(self, freq, center_freq, sigma):
+        return numpy.exp(-0.5 * ((freq - center_freq) / sigma) ** 2)
     
 
     def spectrogram(self):
@@ -443,6 +486,19 @@ class SerialReader(QMainWindow):
             self.import_data.pop(0)
 
             data = numpy.array(self.import_data, dtype=float)
+
+            if self.preditction_checkbox.isChecked():
+                try:
+                    expectedrpm_input = int(self.expectedrpm_input.text())
+                    if expectedrpm_input <= 0:
+                        print("Błąd: Zakładane RPM musi być liczbą większą od zera!")
+                        return
+                except ValueError:
+                    print("Błąd: Zakładane RPM musi być liczbą całkowitą!")
+                    return
+                
+                self.predict(data, expectedrpm_input)
+
             self.plot_values_data(data)
 
             data_fft = list(map(int, data))
@@ -479,6 +535,178 @@ class SerialReader(QMainWindow):
                 for value in self.export_data:
                     writer.writerow([value])
             print(f"Plik zapisany jako {file_name}")
+
+
+
+    def predicion_color_change(self, line_edit: QLineEdit, percent_value: float):
+        if percent_value < 0 or percent_value > 100:
+            raise ValueError("Błąd wartości")
+
+        if percent_value <= 20:
+            line_edit.setStyleSheet("""
+            background-color: #D0F0C0;
+            """)
+        elif percent_value <= 40:
+            line_edit.setStyleSheet("""
+            background-color: #F0F8A0;
+            """)
+        elif percent_value <= 60:
+            line_edit.setStyleSheet("""
+            background-color: #FFF4A3;
+            """)
+        elif percent_value <= 80:
+            line_edit.setStyleSheet("""
+            background-color: #FFD580;
+            """)
+        else:
+            line_edit.setStyleSheet("""
+            background-color: #FFB3B3;
+            """)
+
+
+    def predict(self, data, expected_rpm):
+        SAMPLING_RATE = 24000
+        SAMPLE_SEC = len(data)//SAMPLING_RATE
+
+        model = tf.keras.models.load_model('model_cnn_imb1.h5')
+        model2 = tf.keras.models.load_model('model_cnn_imb2.h5')
+
+        windows_test = []
+
+        current_window = []
+        row_counter = 0
+
+        for row in data:
+            if row_counter > SAMPLE_SEC * SAMPLING_RATE:
+                break
+            current_window.append(row)
+            if len(current_window) >= SAMPLING_RATE:
+                windows_test.append(current_window)
+                current_window = []
+            row_counter = row_counter + 1
+
+
+        fft_test_imb_1 = []
+        fft_test_imb_2 = []
+
+        for window in windows_test:
+            for i in range(50, 1000, 50):
+                window = self.notch_filter(window, i, 24000, 12)
+
+            window = window - numpy.mean(window)
+
+            fft_result = numpy.fft.fft(window)
+            
+            fft_freq = numpy.fft.fftfreq(len(window), 1 / SAMPLING_RATE)
+
+            fft_magnitude = numpy.abs(fft_result) / (SAMPLING_RATE)
+            
+            half_n = SAMPLING_RATE // 2
+            fft_freq = fft_freq[:half_n]
+            fft_magnitude = fft_magnitude[:half_n]
+            fft_magnitude = fft_magnitude[:1000]
+            
+            fft_test_imb_1.append(fft_magnitude)
+
+
+        for window in windows_test:
+            for i in range(50, 4000, 50):
+                window = self.notch_filter(window, i, 24000, 24)
+
+            window = window - numpy.mean(window)
+
+            fft_result = numpy.fft.fft(window)
+            
+            fft_freq = numpy.fft.fftfreq(len(window), 1 / SAMPLING_RATE)
+
+            fft_magnitude = numpy.abs(fft_result) / (SAMPLING_RATE)
+            
+            expected_freq = expected_rpm / 60
+
+            window_width_hz = 16
+            sigma = window_width_hz / 6
+
+            gaussian_window = numpy.exp(-0.5 * ((fft_freq - expected_freq) / sigma) ** 2)
+
+            half_n = 4000
+
+            positive_freq = fft_freq[:half_n]
+            positive_fft = fft_magnitude[:half_n]
+            gaussian_window_positive = gaussian_window[:half_n]
+
+            weighted_fft = numpy.abs(positive_fft) * gaussian_window_positive
+
+            peak_idx = numpy.argmax(weighted_fft)
+            found_freq = positive_freq[peak_idx]
+            
+            peak_amplitude = weighted_fft[peak_idx]
+            threshold = 0.8 * peak_amplitude
+
+            left_idx = peak_idx - 1 if peak_idx - 1 >= 0 else None
+            right_idx = peak_idx + 1 if peak_idx + 1 < len(weighted_fft) else None
+
+            left_freq = positive_freq[left_idx] if left_idx is not None else None
+            right_freq = positive_freq[right_idx] if right_idx is not None else None
+
+            left_amplitude = weighted_fft[left_idx] if left_idx is not None else None
+            right_amplitude = weighted_fft[right_idx] if right_idx is not None else None
+
+            if left_amplitude is not None and left_amplitude >= threshold:
+                found_freq = (found_freq + left_freq) / 2
+
+            if right_amplitude is not None and right_amplitude >= threshold:
+                found_freq = (found_freq + right_freq) / 2
+
+            found_freq = round(found_freq * 2) / 2
+
+            f1 = found_freq
+            f2 = 2 * f1
+            f3 = 3 * f1
+
+            positive_freqs = fft_freq[:half_n]
+            positive_power = fft_magnitude[:half_n]
+
+            window_width_hz = 4
+            sigma = window_width_hz / 6
+
+            gaussian_f1 = self.gaussian_filter(numpy.array(positive_freqs), f1, sigma)
+            gaussian_f2 = self.gaussian_filter(numpy.array(positive_freqs), f2, sigma)
+            gaussian_f3 = self.gaussian_filter(numpy.array(positive_freqs), f3, sigma)
+
+            filtered_power_f1 = numpy.array(positive_power) * gaussian_f1
+            filtered_power_f2 = numpy.array(positive_power) * gaussian_f2
+            filtered_power_f3 = numpy.array(positive_power) * gaussian_f3
+
+            filtered_power = filtered_power_f1 + filtered_power_f2 + filtered_power_f3
+            filtered_freq = numpy.array(positive_freqs)
+            
+            fft_test_imb_2.append(filtered_power)
+
+        predictions_imb_model1 = []
+        predictions_imb_model2 = []
+
+        X_test1 = numpy.array(fft_test_imb_1)
+        X_test1 = X_test1[..., numpy.newaxis]
+        X_test2 = numpy.array(fft_test_imb_2)
+        X_test2 = X_test2[..., numpy.newaxis]
+
+        predictions1 = model.predict(X_test1)
+        predictions2 = model2.predict(X_test2)
+
+        predictions_percent1 = predictions1.flatten() * 100  
+        predictions_percent2 = predictions2.flatten() * 100
+
+        for i, prob in enumerate(predictions_percent1):
+            predictions_imb_model1.append(prob)
+
+        for i, prob in enumerate(predictions_percent2):
+            predictions_imb_model2.append(prob)
+
+        imb_final_result = numpy.mean(predictions_imb_model1 + predictions_imb_model2)
+
+        self.imblanace_value.setText(f"{imb_final_result:.2f}%")
+        self.predicion_color_change(self.imblanace_value, imb_final_result)
+
 
 
 #if __name__ == "__main__":

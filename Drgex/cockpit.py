@@ -4,6 +4,9 @@ import shutil
 import csv
 import numpy
 import string
+import tensorflow as tf
+from keras.api.models import *
+from keras.api.layers import *
 from scipy.signal import savgol_filter
 from PyQt6 import QtCore, QtGui
 from PyQt6.QtCore import Qt
