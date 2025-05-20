@@ -13,6 +13,7 @@ from keras.api.models import *
 from keras.api.layers import *
 from scipy.signal import iirnotch
 from scipy.signal import filtfilt
+from scipy.fft import fft, fftfreq
 from PyQt6.QtWidgets import QApplication, QMainWindow, QWidget, QGridLayout, QPushButton, QComboBox, QLabel, QLineEdit, QCheckBox, QVBoxLayout, QSpacerItem, QSizePolicy, QFileDialog
 from PyQt6.QtCore import Qt, QTimer
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
@@ -193,6 +194,48 @@ class SerialReader(QMainWindow):
             border: 1px solid #000000;
         """)
 
+        pred_imbalance_pul_label = QLabel("Prędkość drgań [mm/s]")
+        grid_layout.addWidget(pred_imbalance_pul_label, 5, 0, 1, 2)
+
+        self.imblanace_pul_value = QLineEdit(self)
+        self.imblanace_pul_value.setReadOnly(True)
+        grid_layout.addWidget(self.imblanace_pul_value, 5, 2, 1, 2)
+
+        self.imblanace_pul_value.setStyleSheet("""
+            background-color: #E0E0E0;
+            border: 1px solid #000000;
+        """)
+
+        pred_imbalance_pul_freq_label = QLabel("Częstotliwość pracy maszyny [Hz]")
+        grid_layout.addWidget(pred_imbalance_pul_freq_label, 6, 0, 1, 2)
+
+        self.imblanace_pul_freq = QLineEdit(self)
+        self.imblanace_pul_freq.setReadOnly(True)
+        grid_layout.addWidget(self.imblanace_pul_freq, 6, 2, 1, 2)
+
+        self.imblanace_pul_freq.setStyleSheet("""
+            background-color: #E0E0E0;
+            border: 1px solid #000000;
+        """)
+
+        prediction_hardness_label = QLabel("Obliczanie twardości materiału")
+        grid_layout.addWidget(prediction_hardness_label, 8, 0, 1, 3)
+
+        self.preditction_hardness_checkbox = QCheckBox()
+        grid_layout.addWidget(self.preditction_hardness_checkbox, 8, 3, 1, 1)
+
+        pred_hardness_label = QLabel("Twardość [GPa]")
+        grid_layout.addWidget(pred_hardness_label, 9, 0, 1, 2)
+
+        self.hardness_value = QLineEdit(self)
+        self.hardness_value.setReadOnly(True)
+        grid_layout.addWidget(self.hardness_value, 9, 2, 1, 2)
+
+        self.hardness_value.setStyleSheet("""
+            background-color: #E0E0E0;
+            border: 1px solid #000000;
+        """)
+
         central_widget.setLayout(grid_layout)
 
     def load_com_ports(self):
@@ -357,6 +400,10 @@ class SerialReader(QMainWindow):
                     return
                 
                 self.predict(data, expectedrpm_input)
+                self.predict_pul(data, expectedrpm_input)
+
+            if self.preditction_hardness_checkbox.isChecked():
+                self.hardness_predict(data)
 
             if self.notch_checkbox.isChecked():
                 try:
@@ -498,6 +545,10 @@ class SerialReader(QMainWindow):
                     return
                 
                 self.predict(data, expectedrpm_input)
+                self.predict_pul(data, expectedrpm_input)
+
+            if self.preditction_hardness_checkbox.isChecked():            
+                self.hardness_predict(data)
 
             self.plot_values_data(data)
 
@@ -707,6 +758,103 @@ class SerialReader(QMainWindow):
         self.imblanace_value.setText(f"{imb_final_result:.2f}%")
         self.predicion_color_change(self.imblanace_value, imb_final_result)
 
+    
+    def predict_pul(self, data, expected_rpm):
+        SAMPLING_RATE = 24000
+
+        n = len(data)
+        window = numpy.hanning(n)
+        yf = fft(data * window)
+        xf = fftfreq(n, 1/SAMPLING_RATE)[1:n//2]
+        yf = (2.0 / numpy.sum(window)) * numpy.abs(yf[1:n//2])
+        velocity_spectrum = (yf / (2 * numpy.pi * xf)) * 1000 
+
+        est_freq = expected_rpm / 60.0
+        search_bandwidth = 0.1 * est_freq
+        mask = (xf > est_freq - search_bandwidth) & (xf < est_freq + search_bandwidth)
+        if not numpy.any(mask):
+            print("Brak danych w zakresie 1x RPM.")
+            return None, None
+        
+        freq_range = xf[mask]
+        spec_range = velocity_spectrum[mask]
+
+        idx_max = numpy.argmax(spec_range)
+
+        if 0 < idx_max < len(spec_range)-1:
+            y0, y1, y2 = spec_range[idx_max-1], spec_range[idx_max], spec_range[idx_max+1]
+            x0, x1, x2 = freq_range[idx_max-1], freq_range[idx_max], freq_range[idx_max+1]
+
+            denominator = (y0 - 2*y1 + y2)
+            if denominator == 0:
+                peak_freq = x1
+                peak_value = y1
+            else:
+                delta = 0.5 * (y0 - y2) / denominator
+                peak_freq = x1 + delta * (x2 - x0) / 2
+                peak_value = y1 - 0.25 * (y0 - y2) * delta
+        else:
+            peak_freq = freq_range[idx_max]
+            peak_value = spec_range[idx_max]
+
+        self.imblanace_pul_value.setText(f"{peak_value:.2f}")
+        self.imblanace_pul_freq.setText(f"{peak_freq:.2f}")
+
+
+    def hardness_predict(self, data):
+        SAMPLING_RATE = 24000
+        SAMPLE_SEC = len(data)//SAMPLING_RATE
+
+        model = tf.keras.models.load_model('model_hardness.keras')
+
+        windows_test = []
+
+        current_window = []
+        row_counter = 0
+
+        for row in data:
+            if row_counter > SAMPLE_SEC * SAMPLING_RATE:
+                break
+            current_window.append(row)
+            if len(current_window) >= SAMPLING_RATE:
+                windows_test.append(current_window)
+                current_window = []
+            row_counter = row_counter + 1
+
+        fft_test = []
+
+        for window in windows_test:
+            window = self.notch_filter(window, 50, 24000, 72)
+
+            for i in range(50, 12050, 50):
+                window = self.notch_filter(window, i, 24000, 48)
+
+            window = window - numpy.mean(window)
+
+            fft_result = numpy.fft.fft(window)
+
+            fft_freq = numpy.fft.fftfreq(len(window), 1 / SAMPLING_RATE)
+
+            fft_magnitude = numpy.abs(fft_result) / (SAMPLING_RATE)
+
+            half_n = SAMPLING_RATE // 2
+            fft_freq = fft_freq[:half_n]
+            fft_magnitude = fft_magnitude[:half_n]
+
+            fft_freq = fft_freq[:4000]
+            fft_magnitude = fft_magnitude[:4000]
+
+            fft_test.append(fft_magnitude)
+
+
+        X_test = numpy.array(fft_test)
+        X_test = X_test[..., numpy.newaxis]
+        predictions = model.predict(X_test)
+        predictions = numpy.array(predictions).flatten()
+
+        hardness_final_result = numpy.mean(predictions)
+
+        self.hardness_value.setText(f"{hardness_final_result:.4f}")
 
 
 #if __name__ == "__main__":
