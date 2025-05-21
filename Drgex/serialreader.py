@@ -9,8 +9,8 @@ import csv
 import os
 import scipy.signal
 import tensorflow as tf
-from keras.api.models import *
-from keras.api.layers import *
+from tensorflow.keras.models import *
+from tensorflow.keras.layers import *
 from scipy.signal import iirnotch
 from scipy.signal import filtfilt
 from scipy.fft import fft, fftfreq
@@ -236,6 +236,24 @@ class SerialReader(QMainWindow):
             border: 1px solid #000000;
         """)
 
+        prediction_material_label = QLabel("Wykrywanie materiału")
+        grid_layout.addWidget(prediction_material_label, 10, 0, 1, 3)
+
+        self.prediction_material_checkbox = QCheckBox()
+        grid_layout.addWidget(self.prediction_material_checkbox, 10, 3, 1, 1)
+
+        pred_material_label = QLabel("Materiał")
+        grid_layout.addWidget(pred_material_label, 11, 0, 1, 2)
+
+        self.material_value = QLineEdit(self)
+        self.material_value.setReadOnly(True)
+        grid_layout.addWidget(self.material_value, 11, 2, 1, 2)
+
+        self.material_value.setStyleSheet("""
+            background-color: #E0E0E0;
+            border: 1px solid #000000;
+        """)
+
         central_widget.setLayout(grid_layout)
 
     def load_com_ports(self):
@@ -405,6 +423,10 @@ class SerialReader(QMainWindow):
             if self.preditction_hardness_checkbox.isChecked():
                 self.hardness_predict(data)
 
+
+            if self.prediction_material_checkbox.isChecked():
+                self.material_predict(data)
+
             if self.notch_checkbox.isChecked():
                 try:
                     freq_value = int(self.freq_input.text())
@@ -549,6 +571,9 @@ class SerialReader(QMainWindow):
 
             if self.preditction_hardness_checkbox.isChecked():            
                 self.hardness_predict(data)
+
+            if self.prediction_material_checkbox.isChecked():
+                self.material_predict(data)
 
             self.plot_values_data(data)
 
@@ -857,6 +882,48 @@ class SerialReader(QMainWindow):
         self.hardness_value.setText(f"{hardness_final_result:.4f}")
 
 
+    def material_predict(self, data):
+        SAMPLING_RATE = 24000
+        SAMPLE_SEC = len(data) // SAMPLING_RATE
+
+        model = tf.keras.models.load_model('model_fft_materials.h5')
+
+        windows_test = []
+        current_window = []
+        row_counter = 0
+
+        for row in data:
+            if row_counter > SAMPLE_SEC * SAMPLING_RATE:
+                break
+            current_window.append(row)
+            if len(current_window) >= SAMPLING_RATE:
+                windows_test.append(current_window)
+                current_window = []
+            row_counter += 1
+
+        fft_test = []
+
+        for window in windows_test:
+            for i in range(50, 1000, 50):
+                window = self.notch_filter(window, i, 24000, 12)
+            window = window - numpy.mean(window)
+            fft_result = numpy.fft.fft(window)
+            fft_magnitude = numpy.abs(fft_result) / SAMPLING_RATE
+            half_n = SAMPLING_RATE // 2
+            fft_magnitude = fft_magnitude[:half_n]
+            fft_magnitude = fft_magnitude[:1000]  
+            fft_test.append(fft_magnitude)
+
+        X_test = numpy.array(fft_test)
+        X_test = X_test[..., numpy.newaxis]  
+
+        predictions = model.predict(X_test)
+        predicted_class_idx = numpy.argmax(numpy.mean(predictions, axis=0))
+
+        material_classes = ['Drewno', 'Metal', 'Plastik']
+        predicted_material = material_classes[predicted_class_idx]
+
+        self.material_value.setText(predicted_material)
 #if __name__ == "__main__":
 #    app = QApplication(sys.argv)
 #    window = SerialReader()
